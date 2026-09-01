@@ -19,10 +19,10 @@ jobs:
           cd YourApp
           rm -rf www/*
           cp -r ../* www/ || true
+          
+          # BARIS SAKTI UNTUK MEMASANG IKON LU:
+          echo '<platform name="android"><icon src="www/icon.png" /></platform>' >> config.xml
+          
           cordova platform add android
           cordova build android --bundle
-      - name: Upload File APK Jadi Lu
-        uses: actions/upload-artifact@v4
-        with:
-          name: YourTask-App-Bersih
-          path: YourApp/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          
