@@ -20,9 +20,9 @@ jobs:
           rm -rf www/*
           cp -r ../* www/ || true
           
-          # BARIS SAKTI UNTUK MEMASANG IKON LU:
-          echo '<platform name="android"><icon src="www/icon.png" /></platform>' >> config.xml
-          
+          # CARA AMAN MEMASANG IKON BIAR SEVER GAK EROR:
           cordova platform add android
+          cp www/icon.png platforms/android/app/src/main/res/mipmap-mdpi/icon.png || true
+          
           cordova build android --bundle
           
