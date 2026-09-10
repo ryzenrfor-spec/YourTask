@@ -1456,11 +1456,11 @@
     var fileAi = document.createElement("input");
     fileAi.type = "file";
     fileAi.accept = ".pdf,image/*";
-    fileAi.style.cssText = "flex:1;min-width:150px;font-size:12px";
+    fileAi.style.cssText = "flex:1;min-width:0;font-size:12px";
     var insAi = document.createElement("input");
     insAi.type = "text";
     insAi.placeholder = "Perintah, mis: ambil jadwal kelas X.4";
-    insAi.style.cssText = "flex:1;min-width:150px;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--line);background-color:var(--navy-700);color:var(--text);font-family:inherit;font-size:12.5px";
+    insAi.style.cssText = "flex:2;min-width:0;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--line);background-color:var(--navy-700);color:var(--text);font-family:inherit;font-size:12.5px";
     aiRow.appendChild(fileAi); aiRow.appendChild(insAi);
     fAi.appendChild(lblAi); fAi.appendChild(aiRow);
     var keyRow = document.createElement("div");
