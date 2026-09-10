@@ -1463,72 +1463,68 @@
     insAi.style.cssText = "flex:2;min-width:0;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--line);background-color:var(--navy-700);color:var(--text);font-family:inherit;font-size:12.5px";
     aiRow.appendChild(fileAi); aiRow.appendChild(insAi);
     fAi.appendChild(lblAi); fAi.appendChild(aiRow);
-    var keyRow = document.createElement("div");
-    keyRow.style.cssText = "display:flex;gap:8px;margin-top:8px;align-items:center";
-    var keyAi = document.createElement("input");
+        var keyAi = document.createElement("input");
     keyAi.type = "password";
     keyAi.placeholder = "Gemini API key (disimpan lokal)";
     var keyTersimpan = "";
     try { keyTersimpan = localStorage.getItem(ALAT_AI_KEY_STORE) || ""; } catch (e) {}
     keyAi.value = keyTersimpan;
-    if (keyTersimpan) keyAi.type = "hidden";
-    keyAi.style.cssText = "flex:1;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--line);background-color:var(--navy-700);color:var(--text);font-family:inherit;font-size:12.5px";
+    keyAi.style.cssText = "width:100%;box-sizing:border-box;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--line);background-color:var(--navy-700);color:var(--text);font-family:inherit;font-size:12.5px;margin-top:8px";
+    fAi.appendChild(keyAi);
 
-    var keyLock = document.createElement("span");
-    keyLock.style.cssText = "flex:1;font-size:12px;color:var(--text-muted)";
-    keyLock.hidden = true;
+    var btnRow = document.createElement("div");
+    btnRow.style.cssText = "display:flex;gap:8px;margin-top:8px;align-items:center;justify-content:space-between";
 
-    var btnGantiKey = document.createElement("button");
-    btnGantiKey.type = "button";
-    btnGantiKey.className = "btn btn-ghost btn-sm";
-    btnGantiKey.textContent = "Ganti";
-    btnGantiKey.hidden = true;
-    btnGantiKey.onclick = function () {
-      keyAi.type = "password";
-      keyAi.value = "";
-      keyLock.hidden = true;
-      btnGantiKey.hidden = true;
-      btnHapusKey.hidden = true;
-      keyAi.focus();
-    };
-
-    var btnHapusKey = document.createElement("button");
-    btnHapusKey.type = "button";
-    btnHapusKey.className = "btn btn-ghost btn-sm";
-    btnHapusKey.textContent = "✕";
-    btnHapusKey.hidden = true;
-    btnHapusKey.onclick = function () {
-      if (!confirm("Hapus API key yang tersimpan?")) return;
-      try { localStorage.removeItem(ALAT_AI_KEY_STORE); } catch (e) {}
-      keyTersimpan = "";
-      keyAi.value = "";
-      keyAi.type = "password";
-      keyLock.hidden = true;
-      btnGantiKey.hidden = true;
-      btnHapusKey.hidden = true;
-      showToast("API key tersimpan dihapus.");
-    };
-
-    function alatKunciKey(tampil) {
-      if (!tampil) return;
-      keyAi.type = "hidden";
-      keyLock.textContent = "🔑 •••• " + keyTersimpan.slice(-4);
-      keyLock.hidden = false;
-      btnGantiKey.hidden = false;
-      btnHapusKey.hidden = false;
-    }
-    alatKunciKey(keyTersimpan);
+    var btnSaveKey = document.createElement("button");
+    btnSaveKey.type = "button";
+    btnSaveKey.className = "btn btn-ghost btn-sm";
+    btnSaveKey.textContent = "💾 Simpan Key";
 
     var btnAi = document.createElement("button");
     btnAi.type = "button";
     btnAi.className = "btn btn-ghost btn-sm";
-    btnAi.textContent = "🔍 Pindai AI";
-    keyRow.appendChild(keyAi);
-    keyRow.appendChild(keyLock);
-    keyRow.appendChild(btnGantiKey);
-    keyRow.appendChild(btnHapusKey);
-    keyRow.appendChild(btnAi);
-    fAi.appendChild(keyRow):
+    btnAi.textContent = "🔎 Pindai AI";
+
+    btnRow.appendChild(btnSaveKey);
+    btnRow.appendChild(btnAi);
+    fAi.appendChild(btnRow);
+
+    var aiStatus = document.createElement("p");
+    aiStatus.style.cssText = "margin:6px 0 0;font-size:11.5px;color:var(--text-muted)";
+    function alatStatusKey() {
+      if (keyTersimpan) {
+        aiStatus.textContent = "🔑 Key tersimpan: •••• " + keyTersimpan.slice(-4);
+        aiStatus.style.color = "var(--teal-400)";
+      } else {
+        aiStatus.textContent = "Key gratis: aistudio.google.com → Create API key. File diproses langsung ke Google, tidak disimpan.";
+        aiStatus.style.color = "var(--text-muted)";
+      }
+    }
+    alatStatusKey();
+    fAi.appendChild(aiStatus);
+
+    function alatSimpanKey() {
+      var kunci = keyAi.value.trim();
+      if (kunci) {
+        keyTersimpan = kunci;
+        try { localStorage.setItem(ALAT_AI_KEY_STORE, kunci); } catch (e) {}
+        alatStatusKey();
+        showToast("API key disimpan.");
+      } else if (keyTersimpan) {
+        if (!confirm("Kolom key kosong. Hapus API key yang tersimpan?")) return;
+        keyTersimpan = "";
+        try { localStorage.removeItem(ALAT_AI_KEY_STORE); } catch (e) {}
+        keyAi.value = "";
+        alatStatusKey();
+        showToast("API key terakhir dihapus — masukkan key baru untuk pakai AI.");
+      } else {
+        showToast("Kolom key kosong — tidak ada yang disimpan/dihapus.");
+      }
+    }
+    btnSaveKey.onclick = alatSimpanKey;
+    keyAi.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); alatSimpanKey(); }
+    });
     
     var aiStatus = document.createElement("p");
     aiStatus.style.cssText = "margin:6px 0 0;font-size:11.5px;color:var(--text-muted)";
