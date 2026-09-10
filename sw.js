@@ -1,5 +1,6 @@
-/* YourTask Service Worker - GitHub Pages Project Site (v5) */
-const CACHE_NAME = 'yourtask-cache-v5';
+
+/* YourTask Service Worker - GitHub Pages Project Site (v6) */
+const CACHE_NAME = 'yourtask-cache-v6';
 const BASE = '/YourTask/';
 
 const PRECACHE_URLS = [
@@ -35,7 +36,6 @@ self.addEventListener('activate', (event) => {
     ).then(() => self.clients.claim())
   );
 });
-
 /* FETCH — navigation-first fallback ke index.html */
 self.addEventListener('fetch', (event) => {
   const req = event.request;
@@ -145,6 +145,7 @@ function normalize(v) {
 async function checkBackgroundDeadlines() {
   const tasks = (await idbGet('tasks')) || [];
   const schedule = (await idbGet('schedule')) || {};
+  const activeDays = (await idbGet('activeDays')) || [1, 2, 3, 4, 5, 6];
   const now = getWibNow();
 
   for (const task of tasks) {
@@ -152,6 +153,7 @@ async function checkBackgroundDeadlines() {
 
     let best = null;
     for (let day = 1; day <= 6; day++) {
+      if (!activeDays.includes(day)) continue; /* hormati hari nonaktif */
       const entries = schedule[day] || [];
       for (const entry of entries) {
         if (entry.tipe !== 'pelajaran') continue;
@@ -170,7 +172,7 @@ async function checkBackgroundDeadlines() {
     if (best && best.diff >= 0 && best.diff <= 24 * 60) {
       const dedupKey = 'notified_' + task.id + '_' + best.start;
       const last = await idbGet(dedupKey);
-      if (last) continue; /* sudah pernah dinotifikasi untuk deadline ini */
+      if (last) continue;
 
       await self.registration.showNotification('⏰ Deadline tugas mendekat', {
         body: task.mapel + ' (' + task.detail + ') — kelas mulai pukul ' + best.start + '.',
