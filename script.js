@@ -1519,11 +1519,16 @@
     }
     alatKunciKey(keyTersimpan);
 
+    var btnAi = document.createElement("button");
+    btnAi.type = "button";
+    btnAi.className = "btn btn-ghost btn-sm";
+    btnAi.textContent = "🔍 Pindai AI";
     keyRow.appendChild(keyAi);
     keyRow.appendChild(keyLock);
     keyRow.appendChild(btnGantiKey);
     keyRow.appendChild(btnHapusKey);
-    fAi.appendChild(keyRow);
+    keyRow.appendChild(btnAi);
+    fAi.appendChild(keyRow):
     
     var aiStatus = document.createElement("p");
     aiStatus.style.cssText = "margin:6px 0 0;font-size:11.5px;color:var(--text-muted)";
