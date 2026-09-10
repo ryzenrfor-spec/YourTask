@@ -93,6 +93,37 @@
     el.toast = document.getElementById("toast");
   }
 
+  /* --- MIRROR KE INDEXEDDB (dibaca oleh Service Worker) --- */
+  var IDB_NAME = "yourtask-db-v1";
+  var IDB_STORE = "state";
+
+  function openStateDB() {
+    return new Promise(function (resolve, reject) {
+      var req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = function () {
+        req.result.createObjectStore(IDB_STORE, { keyPath: "key" });
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+
+  function idbPut(key, value) {
+    return openStateDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put({ key: key, value: value });
+        tx.oncomplete = function () { db.close(); resolve(); };
+        tx.onerror = function () { db.close(); reject(tx.error); };
+      });
+    }).catch(function (e) { console.warn("Gagal mirror ke IndexedDB:", e); });
+  }
+
+  function mirrorStateToIDB() {
+    idbPut("tasks", tugasList);
+    idbPut("schedule", JADWAL);
+  }
+
   /* --- LOAD & SAVE DATA V2 --- */
   function muatProfil() {
     try {
@@ -148,6 +179,7 @@
         }
       }
       localStorage.setItem(SCHEDULE_KEY, JSON.stringify(JADWAL));
+      mirrorStateToIDB();
     } catch (e) {}
   }
 
@@ -164,7 +196,8 @@
 
   function simpanTugas() {
     try { 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tugasList)); 
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tugasList));
+      mirrorStateToIDB();
     } catch (e) {}
   }
 
@@ -499,7 +532,7 @@
     if (el.tugasKosong) el.tugasKosong.hidden = terlihat.length !== 0;
     var aktif = tugasList.filter(function (t) { return !t.completed; }).length;
     var total = tugasList.length;
-    if (el.ringkasan) el.ringkasan.textContent = total === 0 ? "Belum ada tugas" : (aktif + " tugas aktif dari " + total + " total");
+        if (el.ringkasan) el.ringkasan.textContent = total === 0 ? "Belum ada tugas" : (aktif + " tugas aktif dari " + total + " total");
   }
 
   function buatItemTugas(t) {
@@ -527,11 +560,21 @@
     if (t.completed) {
       meta.innerHTML = '<span class="tag tag-done">Selesai</span>';
     } else if (dl.ada) {
-      var teksDl = dl.label + " · " + dl.mulai + (dl.jamKe ? " (Jam ke-" + dl.jamKe + ")" : "");
-      meta.innerHTML = '<span class="tag tag-deadline">' + teksDl + '</span>';
-      if (urgent) meta.innerHTML += '<span class="tag tag-urgent">< 24 jam — segera!</span>';
+      var tagDl = document.createElement("span");
+      tagDl.className = "tag tag-deadline";
+      tagDl.textContent = dl.label + " · " + dl.mulai + (dl.jamKe ? " (Jam ke-" + dl.jamKe + ")" : "");
+      meta.appendChild(tagDl);
+      if (urgent) {
+        var tagUrgent = document.createElement("span");
+        tagUrgent.className = "tag tag-urgent";
+        tagUrgent.textContent = "< 24 jam — segera!";
+        meta.appendChild(tagUrgent);
+      }
     } else {
-      meta.innerHTML = '<span class="tag">Deadline tidak ditemukan</span>';
+      var tagNone = document.createElement("span");
+      tagNone.className = "tag";
+      tagNone.textContent = "Deadline tidak ditemukan";
+      meta.appendChild(tagNone);
     }
 
     body.appendChild(mapel); body.appendChild(detail); body.appendChild(meta);
@@ -553,18 +596,44 @@
       var dl = cariDeadline(t.mapel);
       if (dl.ada && dl.selisihJam <= 24) urgent.push({ tugas: t, dl: dl });
     });
-    if (urgent.length === 0) { el.banner.hidden = true; } 
-    else {
-      el.banner.hidden = false;
-      if (urgent.length === 1) {
-        if (el.bannerTeks) el.bannerTeks.textContent = urgent[0].tugas.mapel + " (" + urgent[0].tugas.detail + ") — mapel dimulai " + urgent[0].dl.label.toLowerCase() + " pukul " + urgent[0].dl.mulai + ".";
-      } else {
-        if (el.bannerTeks) el.bannerTeks.textContent = urgent.length + " tugas memiliki mapel yang dimulai dalam 24 jam ke depan.";
-      }
-      if (el.btnIzinNotif) el.btnIzinNotif.hidden = !("Notification" in window) || notifDiizinkan || Notification.permission === "granted";
+
+    if (urgent.length === 0) {
+      el.banner.hidden = true;
+      return;
     }
+
+    el.banner.hidden = false;
+    if (urgent.length === 1) {
+      if (el.bannerTeks) el.bannerTeks.textContent = urgent[0].tugas.mapel + " (" + urgent[0].tugas.detail + ") — mapel dimulai " + urgent[0].dl.label.toLowerCase() + " pukul " + urgent[0].dl.mulai + ".";
+    } else {
+      if (el.bannerTeks) el.bannerTeks.textContent = urgent.length + " tugas memiliki mapel yang dimulai dalam 24 jam ke depan.";
+    }
+    updateNotificationButton();
+
+    tampilkanNotifikasiUrgent(urgent);
   }
 
+  async function tampilkanNotifikasiUrgent(urgent) {
+    if (!urgent.length || !("Notification" in window) || Notification.permission !== "granted") return;
+    try {
+      var reg = await navigator.serviceWorker.ready;
+      for (var i = 0; i < urgent.length; i++) {
+        var item = urgent[i];
+        var dedupKey = "yourtask-notified-" + item.tugas.id;
+        if (sessionStorage.getItem(dedupKey)) continue;
+
+        await reg.showNotification("⏰ Deadline tugas mendekat", {
+          body: item.tugas.mapel + " (" + item.tugas.detail + ") — dimulai " + item.dl.label.toLowerCase() + " pukul " + item.dl.mulai + ".",
+          icon: new URL("icon.png", reg.scope).href,
+          tag: "yourtask-" + item.tugas.id
+        });
+        sessionStorage.setItem(dedupKey, "1");
+      }
+    } catch (e) {
+      console.error("Gagal menampilkan notifikasi:", e);
+    }
+            }
+  
   function isiDropdownMapel() {
     if (!el.inputMapel) return;
     var mapelSet = new Set();
@@ -617,18 +686,65 @@
     return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); 
   }
 
+  function updateNotificationButton() {
+    if (!el.btnIzinNotif) return;
+    el.btnIzinNotif.hidden = !("Notification" in window) || notifDiizinkan || Notification.permission === "granted";
+  }
+
+  async function mintaIzinNotifikasi() {
+    if (!("Notification" in window)) { showToast("Browser tidak mendukung notifikasi."); return; }
+    try {
+      var hasil = await Notification.requestPermission();
+      if (hasil === "granted") {
+        notifDiizinkan = true;
+        updateNotificationButton();
+        showToast("Notifikasi aktif.");
+        registerPeriodicSync();
+        cekNotifikasi();
+      } else {
+        showToast("Izin notifikasi ditolak.");
+      }
+    } catch (e) {
+      console.error("Permission error:", e);
+      showToast("Gagal mengaktifkan notifikasi.");
+    }
+  }
+
+  async function registerPeriodicSync() {
+    try {
+      var reg = await navigator.serviceWorker.ready;
+      if (!("periodicSync" in reg)) {
+        console.warn("Periodic Background Sync tidak didukung browser ini.");
+        return;
+      }
+      var status = await navigator.permissions.query({ name: "periodic-background-sync" });
+      if (status.state !== "granted") {
+        console.warn("Periodic Background Sync belum diizinkan (PWA harus di-install ke Home Screen).");
+        return;
+      }
+      await reg.periodicSync.register("deadline-check", { minInterval: 15 * 60 * 1000 });
+      console.log("Background deadline check aktif.");
+    } catch (e) {
+      console.warn("Gagal daftar periodic sync:", e);
+    }
+  }
+  
   function init() {
     grab();
     muatProfil();
     muatJadwal();
     muatTugas();
+    mirrorStateToIDB();
 
     if (el.btnBackup) el.btnBackup.addEventListener("click", exportData);
     if (el.inputRestore) el.inputRestore.addEventListener("change", importData);
 
     var n = nowWIB();
     hariDipilih = (JADWAL[n.dayIndex] && JADWAL[n.dayIndex].length > 0) ? n.dayIndex : 1;
-    if ("Notification" in window && Notification.permission === "granted") notifDiizinkan = true;
+    if ("Notification" in window && Notification.permission === "granted") {
+      notifDiizinkan = true;
+      registerPeriodicSync();
+    }
 
     isiDropdownMapel();
     tickJam();
@@ -830,14 +946,7 @@
     }
 
     if (el.btnIzinNotif) {
-      el.btnIzinNotif.addEventListener("click", function() {
-        if (!("Notification" in window)) return showToast("Tidak mendukung notifikasi.");
-        Notification.requestPermission().then(function (hasil) {
-          notifDiizinkan = hasil === "granted";
-          if (notifDiizinkan) { showToast("Notifikasi aktif."); el.btnIzinNotif.hidden = title; } else { showToast("Izin ditolak."); }
-          cekNotifikasi();
-        });
-      });
+      el.btnIzinNotif.addEventListener("click", mintaIzinNotifikasi);
     }
 
     var chips = document.querySelectorAll(".filter-row .chip");
