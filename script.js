@@ -1583,6 +1583,23 @@
         showToast("Hari sekolah disimpan (tidak ada jadwal terbaca).");
         return;
       }
+            /* PERINGATAN: hari yang akan DITIMPA (sudah punya jadwal) */
+      var ketimpa = parsed.hariAda.filter(function (d) {
+        return JADWAL[d] && JADWAL[d].length > 0;
+      });
+      if (ketimpa.length > 0) {
+        var daftarTimpa = ketimpa.map(function (d) {
+          return NAMA_HARI[d] + " (" + JADWAL[d].length + " baris lama → " + parsed.hasil[d].length + " baris baru)";
+        }).join("\n");
+        var yakinTimpa = confirm(
+          "⚠️ Jadwal berikut akan DITIMPA:\n\n" + daftarTimpa + "\n\n" +
+          "Baris lama di hari tersebut diganti seluruhnya dengan hasil import.\n" +
+          "Tips: backup dulu lewat Profil → Backup kalau ragu.\n\nLanjutkan?"
+        );
+        if (!yakinTimpa) return;
+      }
+
+      
       parsed.hariAda.forEach(function (d) { JADWAL[d] = parsed.hasil[d]; });
       simpanJadwal();
       refreshSemua();
