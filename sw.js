@@ -1,6 +1,5 @@
-
-/* YourTask Service Worker - GitHub Pages Project Site (v6) */
-const CACHE_NAME = 'yourtask-cache-v6';
+/* YourTask Service Worker - GitHub Pages Project Site (v7 - cache-first offline) */
+const CACHE_NAME = 'yourtask-cache-v7';
 const BASE = '/YourTask/';
 
 const PRECACHE_URLS = [
@@ -11,9 +10,6 @@ const PRECACHE_URLS = [
   BASE + 'manifest.json',
   BASE + 'icon.png'
 ];
-
-/* File yang sering berubah -> network-first biar user selalu dapat versi baru */
-const NETWORK_FIRST = ['script.js', 'style.css', 'manifest.json'];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -36,63 +32,44 @@ self.addEventListener('activate', (event) => {
     ).then(() => self.clients.claim())
   );
 });
-/* FETCH — navigation-first fallback ke index.html */
+
+/* FETCH — cache-first + update di belakang (stale-while-revalidate):
+   Cold start = langsung dari cache lokal (tidak menunggu jaringan),
+   versi baru diunduh senyap untuk kunjungan berikutnya. */
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
-  if (req.mode === 'navigate') {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(req, copy)).catch(() => {});
-          return res;
-        })
-        .catch(() =>
-          caches.match(req).then(
-            (cached) => cached || caches.match(BASE + 'index.html') || caches.match(BASE)
-          )
-        )
-    );
-    return;
-  }
-
   const url = new URL(req.url);
-  const isNetworkFirst = NETWORK_FIRST.some((f) => url.pathname.endsWith(f));
+  if (url.origin !== location.origin) return; /* font CDN dll = lewat network biasa */
 
-  if (isNetworkFirst) {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          if (res && res.status === 200) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(req, copy)).catch(() => {});
-          }
-          return res;
-        })
-        .catch(() => caches.match(req))
-    );
-    return;
-  }
+  /* Update senyap di belakang (tidak memperlambat respon) */
+  event.waitUntil(
+    fetch(req).then((res) => {
+      if (res && res.status === 200) {
+        const copy = res.clone();
+        return caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+      }
+    }).catch(() => {})
+  );
 
-  /* cache-first untuk sisanya (icon.png, dll.) */
   event.respondWith(
-    caches.match(req).then((cached) => {
+    caches.match(req, { ignoreSearch: true }).then((cached) => {
       if (cached) return cached;
       return fetch(req).then((res) => {
-        if (res && res.status === 200 && res.type === 'basic') {
+        if (res && res.status === 200) {
           const copy = res.clone();
           caches.open(CACHE_NAME).then((c) => c.put(req, copy)).catch(() => {});
         }
         return res;
-      });
+      }).catch(() =>
+        caches.match(BASE + 'index.html', { ignoreSearch: true }).then((fb) => fb || Response.error())
+      );
     })
   );
 });
 
 /* ==================== BACKGROUND DEADLINE CHECK ==================== */
-
 const DB_NAME = 'yourtask-db-v1';
 const DB_STORE = 'state';
 const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
