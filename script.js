@@ -1258,7 +1258,7 @@
   }
 
   var ALAT_AI_KEY_STORE = "yourtask_gemini_key";
-  var ALAT_AI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+  var ALAT_AI_MODELS = ["gemini-flash-latest", "gemini-3.6-flash"];
   var alatParsedTerakhir = null;
 
   function alatScanAI(file, instruksi, apiKey, statusEl, btnAi, onOk) {
