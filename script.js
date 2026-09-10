@@ -20,6 +20,7 @@
   var notifDiizinkan = false;
   var toastTimer = null;
   var selectedScheduleIndex = null;
+  var hariAktif = [1, 2, 3, 4, 5, 6];
 
   var el = {};
   function grab() {
@@ -123,7 +124,7 @@
     idbPut("tasks", tugasList);
     idbPut("schedule", JADWAL);
   }
-
+  
   /* --- LOAD & SAVE DATA V2 --- */
   function muatProfil() {
     try {
@@ -234,7 +235,8 @@
       tugas: tugasList,
       jadwal: JADWAL,
       username: currentUsername,
-      sekolah: currentSchool
+      sekolah: currentSchool,
+      hariAktif: hariAktif
     };
     var blob = new Blob([JSON.stringify(dataExport, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -256,6 +258,7 @@
         if (parsed.jadwal) localStorage.setItem(SCHEDULE_KEY, JSON.stringify(parsed.jadwal));
         if (parsed.username) localStorage.setItem(USER_KEY, parsed.username);
         if (parsed.sekolah) localStorage.setItem(SCHOOL_KEY, parsed.sekolah);
+        if (parsed.hariAktif) localStorage.setItem("yourtask_hari_aktif", JSON.stringify(parsed.hariAktif));
         
         showToast("Data berhasil di-restore! Memuat ulang...");
         setTimeout(function() { location.reload(); }, 1200); 
@@ -303,11 +306,11 @@
     if (el.jam) el.jam.textContent = pad(n.jam) + ":" + pad(n.menit) + ":" + pad(n.detik);
     if (el.hari) el.hari.textContent = n.hari + ", " + pad(n.tanggal) + "/" + n.bulan + "/" + n.tahun;
   }
-
+  
   function updateStatusKBM() {
     if (!el.cardStatus) return;
     var n = nowWIB();
-    var jadwalHari = JADWAL[n.dayIndex] || null;
+    var jadwalHari = (hariAktif.indexOf(n.dayIndex) !== -1 ? JADWAL[n.dayIndex] : null) || null;
 
     el.cardStatus.classList.remove("is-active");
     if (el.progWrap) el.progWrap.hidden = true;
@@ -394,6 +397,7 @@
   function renderStatusNextHariLain(fromDayIndex) {
     for (var add = 1; add <= 7; add++) {
       var d = (fromDayIndex + add) % 7;
+      if (hariAktif.indexOf(d) === -1) continue;
       if (JADWAL[d] && JADWAL[d].length > 0) {
         var label = add === 1 ? "Besok (" + NAMA_HARI[d] + ")" : NAMA_HARI[d];
         var first = JADWAL[d][0];
@@ -407,8 +411,12 @@
 
   function renderTabHari() {
     if (!el.tabHari) return;
+    if (hariAktif.indexOf(hariDipilih) === -1) {
+      var today = nowWIB().dayIndex;
+      hariDipilih = hariAktif.indexOf(today) !== -1 ? today : (hariAktif.length > 0 ? hariAktif[0] : null);
+    }
     el.tabHari.innerHTML = "";
-    [1, 2, 3, 4, 5, 6].forEach(function (d) {
+    hariAktif.forEach(function (d) {
       var b = document.createElement("button");
       b.type = "button"; b.className = "chip" + (d === hariDipilih ? " is-active" : "");
       b.textContent = NAMA_HARI[d];
@@ -482,11 +490,12 @@
       });
     }
   }
-
+  
   function cariDeadline(mapel) {
     var n = nowWIB();
     for (var add = 0; add <= 7; add++) {
       var dayIndex = (n.dayIndex + add) % 7;
+      if (hariAktif.indexOf(dayIndex) === -1) continue;
       var jadwalHari = JADWAL[dayIndex];
       if (!jadwalHari) continue;
       for (var i = 0; i < jadwalHari.length; i++) {
@@ -532,7 +541,7 @@
     if (el.tugasKosong) el.tugasKosong.hidden = terlihat.length !== 0;
     var aktif = tugasList.filter(function (t) { return !t.completed; }).length;
     var total = tugasList.length;
-        if (el.ringkasan) el.ringkasan.textContent = total === 0 ? "Belum ada tugas" : (aktif + " tugas aktif dari " + total + " total");
+    if (el.ringkasan) el.ringkasan.textContent = total === 0 ? "Belum ada tugas" : (aktif + " tugas aktif dari " + total + " total");
   }
 
   function buatItemTugas(t) {
@@ -728,7 +737,7 @@
       console.warn("Gagal daftar periodic sync:", e);
     }
   }
-  
+    
   function init() {
     grab();
     muatProfil();
@@ -826,7 +835,7 @@
         showToast("Jadwal ditambahkan.");
       });
     }
-
+    
     var btnTutupAksi = document.getElementById("btn-tutup-aksi");
     if (btnTutupAksi) btnTutupAksi.addEventListener("click", function() { if (el.modalAksiJadwal) el.modalAksiJadwal.hidden = true; });
     
@@ -966,6 +975,303 @@
     setInterval(function () { renderTugas(); cekNotifikasi(); }, 60000);
   }
 
+  muatHariAktif();
   if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", init); } else { init(); }
+                        
+  /* ====== ALAT JADWAL + HARI SEKOLAH AKTIF ====== */
+  var HARI_KEY = "yourtask_hari_aktif";
+
+  function muatHariAktif() {
+    try {
+      var raw = localStorage.getItem(HARI_KEY);
+      if (raw) {
+        var arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          var bersih = arr.filter(function (d) { return d >= 1 && d <= 6; })
+                          .sort(function (a, b) { return a - b; });
+          if (bersih.length > 0) hariAktif = bersih;
+        }
+      }
+    } catch (e) {}
+    if (!hariAktif || hariAktif.length === 0) hariAktif = [1, 2, 3, 4, 5, 6];
+    if (typeof idbPut === "function") idbPut("activeDays", hariAktif);
+  }
+
+  function simpanHariAktif() {
+    try { localStorage.setItem(HARI_KEY, JSON.stringify(hariAktif)); } catch (e) {}
+    if (typeof idbPut === "function") idbPut("activeDays", hariAktif);
+  }
+
+  function refreshSemua() {
+    selectedScheduleIndex = null;
+    renderTabHari();
+    renderJadwalHari();
+    updateStatusKBM();
+    renderTugas();
+    cekNotifikasi();
+  }
+
+  var ALAT_DAY_RE = /(senin|selasa|rabu|kamis|jum[''’]?at|sabtu|minggu)/i;
+  var ALAT_TIME_RE = /(\d{1,2})\s*[.:]\s*(\d{2})\s*(?:s\s*\/\s*d|s\.?\s*d\.?|sd|sampai|hingga|[-–—])?\s*(\d{1,2})\s*[.:]\s*(\d{2})/i;
+
+  function alatHariKeIndex(word) {
+    var w = String(word).toLowerCase().replace(/[''’]/g, "");
+    var map = { senin: 1, selasa: 2, rabu: 3, kamis: 4, jumat: 5, sabtu: 6, minggu: 0 };
+    return map.hasOwnProperty(w) ? map[w] : -1;
+  }
+
+  function alatBersihMapel(s) {
+    s = String(s || "").replace(/\s+/g, " ").trim();
+    var cells = s.split(/\s*[|\t;,]\s*/);
+    for (var i = 0; i < cells.length; i++) {
+      if (cells[i].trim() !== "" && !/^\d+$/.test(cells[i].trim())) return cells[i].trim();
+    }
+    return s;
+  }
+
+  function alatParse(text, fallbackDay) {
+    var hasil = {}, peringatan = [];
+    var currentDay = null, lastEnd = null, lastDur = null, lastJamKe = 0;
+    String(text).split(/\r?\n/).forEach(function (rawLine, i) {
+      var line = rawLine.trim();
+      if (line === "") return;
+
+      var head = line.split(/\t|\||;/)[0] || line;
+      var mDay = head.slice(0, 24).match(ALAT_DAY_RE);
+      if (mDay) {
+        var dIdx = alatHariKeIndex(mDay[1]);
+        if (dIdx === 0) {
+          peringatan.push("Baris " + (i + 1) + ": Minggu dilewati (Senin-Sabtu).");
+          currentDay = null; lastEnd = null; lastDur = null; lastJamKe = 0;
+          return;
+        }
+        currentDay = dIdx;
+        if (!hasil[dIdx]) hasil[dIdx] = [];
+        lastEnd = null; lastDur = null; lastJamKe = 0;
+        return;
+      }
+
+      if (currentDay === null && fallbackDay === null) {
+        peringatan.push("Baris " + (i + 1) + " dilewati: tidak ada header hari di atasnya.");
+        return;
+      }
+      if (currentDay === null) currentDay = fallbackDay;
+      if (!hasil[currentDay]) hasil[currentDay] = [];
+
+      var t = line.match(ALAT_TIME_RE);
+      var mulaiM, selesaiM, jamKe = null, sisa = "";
+
+      if (t) {
+        var h1 = parseInt(t[1], 10), m1 = parseInt(t[2], 10);
+        var h2 = parseInt(t[3], 10), m2 = parseInt(t[4], 10);
+        if (h1 > 23 || m1 > 59 || m2 > 59 || (h2 > 23 && !(h2 === 24 && m2 === 0))) {
+          peringatan.push("Baris " + (i + 1) + " dilewati: jam tidak valid.");
+          return;
+        }
+        mulaiM = h1 * 60 + m1;
+        selesaiM = (h2 === 24) ? 1440 : h2 * 60 + m2;
+        if (selesaiM <= mulaiM) {
+          peringatan.push("Baris " + (i + 1) + " dilewati: jam selesai <= jam mulai.");
+          return;
+        }
+        var mJk = line.slice(0, t.index).match(/(\d{1,2})\s*(?:[|;.,\-–—]\s*)?$/);
+        if (mJk) jamKe = parseInt(mJk[1], 10);
+        sisa = line.slice(t.index + t[0].length);
+      } else {
+        if (lastEnd === null || lastDur === null) {
+          peringatan.push("Baris " + (i + 1) + " dilewati: tanpa jam & tanpa acuan baris sebelumnya.");
+          return;
+        }
+        mulaiM = lastEnd;
+        selesaiM = lastEnd + lastDur;
+        if (selesaiM > 1440) {
+          peringatan.push("Baris " + (i + 1) + " dilewati: melewati 24:00.");
+          return;
+        }
+        sisa = line;
+      }
+
+      var mapel = alatBersihMapel(sisa);
+      if (mapel === "") {
+        peringatan.push("Baris " + (i + 1) + " dilewati: nama mapel kosong.");
+        return;
+      }
+      var tipe = /istirahat|break/i.test(mapel) ? "istirahat" : "pelajaran";
+      if (jamKe === null) jamKe = lastJamKe > 0 ? lastJamKe + 1 : hasil[currentDay].length + 1;
+      if (jamKe < 1 || jamKe > 100) jamKe = hasil[currentDay].length + 1;
+
+      hasil[currentDay].push({
+        jamKe: String(jamKe),
+        mulai: pad(Math.floor(mulaiM / 60)) + ":" + pad(mulaiM % 60),
+        selesai: pad(Math.floor(selesaiM / 60) % 24) + ":" + pad(selesaiM % 60),
+        mapel: mapel, tipe: tipe
+      });
+      lastEnd = selesaiM;
+      lastDur = selesaiM - mulaiM;
+      lastJamKe = jamKe;
+    });
+
+    var hariAda = Object.keys(hasil)
+      .filter(function (k) { return hasil[k].length > 0; })
+      .map(function (k) { return parseInt(k, 10); })
+      .sort(function (a, b) { return a - b; });
+    return { hasil: hasil, hariAda: hariAda, peringatan: peringatan };
+          }
+  
+  function alatRenderPreview(parsed) {
+    var wrap = document.getElementById("alat-preview");
+    if (!wrap) return;
+    wrap.innerHTML = "";
+    if (parsed.hariAda.length === 0) {
+      var p0 = document.createElement("p");
+      p0.className = "form-error";
+      p0.textContent = "Tidak ada baris jadwal yang berhasil dibaca. Klik Pratinjau untuk lihat alasannya.";
+      wrap.appendChild(p0);
+    }
+    parsed.hariAda.forEach(function (d) {
+      var title = document.createElement("p");
+      title.style.cssText = "margin:10px 0 4px;font-weight:700;font-size:13px;color:var(--teal-400)";
+      title.textContent = NAMA_HARI[d] + " — " + parsed.hasil[d].length + " baris (akan diganti)";
+      wrap.appendChild(title);
+      var ul = document.createElement("ul");
+      ul.style.cssText = "list-style:none;margin:0;padding:0";
+      parsed.hasil[d].forEach(function (r) {
+        var li = document.createElement("li");
+        li.style.cssText = "font-size:12.5px;color:var(--text-muted);padding:2px 0";
+        li.textContent = r.mulai + "-" + r.selesai + " · " + r.mapel + (r.jamKe ? " (Jam " + r.jamKe + ")" : "");
+        ul.appendChild(li);
+      });
+      wrap.appendChild(ul);
+    });
+    if (parsed.peringatan.length) {
+      var w = document.createElement("p");
+      w.style.cssText = "margin:10px 0 0;font-size:12px;color:var(--amber-500)";
+      w.textContent = "Catatan: " + parsed.peringatan.length + " baris dilewati. " + parsed.peringatan.slice(0, 5).join(" ");
+      wrap.appendChild(w);
+    }
+  }
+
+  function alatBukaModal() {
+    if (document.getElementById("modal-alat")) return;
+
+    var overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.id = "modal-alat";
+
+    var modal = document.createElement("div");
+    modal.className = "modal";
+
+    var head = document.createElement("div");
+    head.className = "modal-head";
+    var h2 = document.createElement("h2"); h2.textContent = "Alat Jadwal";
+    var close = document.createElement("button");
+    close.className = "icon-btn"; close.textContent = "×";
+    close.onclick = function () { overlay.remove(); };
+    head.appendChild(h2); head.appendChild(close);
+
+    var fHari = document.createElement("div");
+    fHari.className = "field";
+    var lblHari = document.createElement("label");
+    lblHari.textContent = "Hari sekolah aktif:";
+    var boxHari = document.createElement("div");
+    boxHari.style.cssText = "display:flex;flex-wrap:wrap;gap:10px";
+    [1, 2, 3, 4, 5, 6].forEach(function (d) {
+      var lab = document.createElement("label");
+      lab.style.cssText = "display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer";
+      var cb = document.createElement("input");
+      cb.type = "checkbox"; cb.value = d;
+      cb.checked = hariAktif.indexOf(d) !== -1;
+      cb.style.accentColor = "#14b8a6";
+      lab.appendChild(cb);
+      lab.appendChild(document.createTextNode(NAMA_HARI[d]));
+      boxHari.appendChild(lab);
+    });
+    fHari.appendChild(lblHari); fHari.appendChild(boxHari);
+
+    var fPaste = document.createElement("div");
+    fPaste.className = "field";
+    var lblPaste = document.createElement("label");
+    lblPaste.textContent = "Tempel jadwal (Excel/Word/WA/apa pun):";
+    var ta = document.createElement("textarea");
+    ta.id = "alat-input"; ta.rows = 8;
+    ta.placeholder = "Contoh:\nSenin\n1  07.00 - 07.40  Upacara\n2  07.40 - 08.20  Matematika\n\natau tanpa jam:\nSelasa\nMatematika\nBahasa Indonesia";
+    ta.style.cssText = "width:100%;padding:11px 12px;border-radius:var(--radius-sm);border:1px solid var(--line);background-color:var(--navy-700);color:var(--text);font-family:inherit;font-size:13px;resize:vertical;box-sizing:border-box";
+    fPaste.appendChild(lblPaste); fPaste.appendChild(ta);
+
+    var hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent = "Header baris = nama hari. Tiap baris: [jam ke] jam mulai - jam selesai, lalu nama mapel. Baris tanpa jam lanjut otomatis dari jam sebelumnya (durasi sama). Tulis Istirahat untuk jeda. Import hanya mengganti hari yang ada di teks.";
+    fPaste.appendChild(hint);
+
+    var preview = document.createElement("div");
+    preview.id = "alat-preview";
+
+    var actions = document.createElement("div");
+    actions.className = "modal-actions";
+
+    var btnPreview = document.createElement("button");
+    btnPreview.className = "btn btn-ghost"; btnPreview.textContent = "Pratinjau";
+    btnPreview.onclick = function () { alatRenderPreview(alatParse(ta.value, hariDipilih)); };
+
+    var btnImport = document.createElement("button");
+    btnImport.className = "btn btn-primary"; btnImport.textContent = "Simpan & Import";
+    btnImport.onclick = function () {
+      var dipilih = [];
+      boxHari.querySelectorAll("input[type=checkbox]").forEach(function (cb) {
+        if (cb.checked) dipilih.push(parseInt(cb.value, 10));
+      });
+      if (dipilih.length === 0) { showToast("Minimal 1 hari harus aktif."); return; }
+
+      var parsed = alatParse(ta.value, hariDipilih);
+      hariAktif = dipilih;
+      simpanHariAktif();
+
+      if (parsed.hariAda.length === 0) {
+        refreshSemua(); overlay.remove();
+        showToast("Hari sekolah disimpan (tidak ada jadwal terbaca).");
+        return;
+      }
+      parsed.hariAda.forEach(function (d) { JADWAL[d] = parsed.hasil[d]; });
+      simpanJadwal();
+      refreshSemua();
+      overlay.remove();
+      showToast("Terimport: " + parsed.hariAda.map(function (d) { return NAMA_HARI[d]; }).join(", "));
+    };
+
+    actions.appendChild(btnPreview); actions.appendChild(btnImport);
+
+    modal.appendChild(head);
+    modal.appendChild(fHari);
+    modal.appendChild(fPaste);
+    modal.appendChild(preview);
+    modal.appendChild(actions);
+    overlay.appendChild(modal);
+
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+  }
+
+  function mulaiAlat() {
+    if (document.getElementById("btn-alat-jadwal")) return;
+    var btn = document.createElement("button");
+    btn.id = "btn-alat-jadwal";
+    btn.className = "btn btn-ghost btn-sm";
+    btn.textContent = "Alat";
+    btn.onclick = alatBukaModal;
+    if (el.btnTambahJadwal && el.btnTambahJadwal.parentNode) {
+      el.btnTambahJadwal.parentNode.insertBefore(btn, el.btnTambahJadwal);
+    } else {
+      btn.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:40";
+      document.body.appendChild(btn);
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", mulaiAlat);
+  } else {
+    mulaiAlat();
+  }
 
 })();
