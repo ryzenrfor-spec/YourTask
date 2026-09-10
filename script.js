@@ -678,7 +678,7 @@
     for (var h in JADWAL) {
       if (JADWAL[h]) {
         JADWAL[h].forEach(function(s) {
-          if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "") {
+if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.test(s.mapel)) {
             mapelSet.add(s.mapel.trim());
           }
         });
