@@ -1609,21 +1609,11 @@
     ta.addEventListener("input", function () { alatParsedTerakhir = null; });
     fileAi.addEventListener("change", function () { alatParsedTerakhir = null; });
 
-        btnAi.onclick = function () {
-      var kunci = keyAi.value.trim();
-      var simpan = false;
-      if (kunci && kunci !== keyTersimpan) {
-        simpan = confirm("Simpan API key ini untuk seterusnya?\n\nOK = simpan, tidak ditanya lagi\nCancel = pakai sekali ini saja");
-      }
+    btnAi.onclick = function () {
+      var kunci = keyAi.value.trim() || keyTersimpan;
       alatScanAI(fileAi.files[0], insAi.value.trim(), kunci, aiStatus, btnAi, function (parsed) {
         alatParsedTerakhir = parsed;
         alatRenderPreview(parsed);
-        if (simpan) {
-          keyTersimpan = kunci;
-          try { localStorage.setItem(ALAT_AI_KEY_STORE, kunci); } catch (e) {}
-          alatKunciKey(true);
-          showToast("API key disimpan — tidak akan ditanya lagi.");
-        }
       });
     };
   }
