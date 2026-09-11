@@ -7,6 +7,20 @@
   "scope": "/YourTask/",
   "display": "standalone",
   "orientation": "portrait",
+  "shortcuts": [
+    {
+      "name": "Tambah Tugas",
+      "short_name": "Tugas+",
+      "url": "/YourTask/?action=tambah-tugas",
+      "icons": [{ "src": "/YourTask/icon.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Jadwal Hari Ini",
+      "short_name": "Jadwal",
+      "url": "/YourTask/?action=jadwal",
+      "icons": [{ "src": "/YourTask/icon.png", "sizes": "192x192" }]
+    }
+  ],
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "icons": [
