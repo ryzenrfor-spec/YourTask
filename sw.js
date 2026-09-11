@@ -129,7 +129,7 @@ async function checkBackgroundDeadlines() {
     if (task.completed) continue;
 
     let best = null;
-    for (let day = 1; day <= 6; day++) {
+    for (let day = 0; day <= 6; day++) {
       if (!activeDays.includes(day)) continue; /* hormati hari nonaktif */
       const entries = schedule[day] || [];
       for (const entry of entries) {
