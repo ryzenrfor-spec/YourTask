@@ -1416,13 +1416,13 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
   }
 
   var ALAT_AI_KEY_STORE = "yourtask_gemini_key";
-  var ALAT_AI_MODELS = ["gemini-flash-latest", "gemini-3.6-flash"];
+  var ALAT_AI_MODELS = ["google/gemma-4-26b-a4b-it:free", "mistralai/pixtral-12b:free"];
   var alatParsedTerakhir = null;
 
   function alatScanAI(file, instruksi, apiKey, statusEl, btnAi, onOk) {
     if (!apiKey) {
       statusEl.style.color = "var(--amber-500)";
-      statusEl.textContent = "Isi API key dulu (gratis di aistudio.google.com).";
+      statusEl.textContent = "Isi API key dulu (gratis di openrouter.ai/settings/keys).";
       return;
     }
     if (!file) {
@@ -1430,20 +1430,19 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       statusEl.textContent = "Pilih file PDF/gambar jadwal dulu.";
       return;
     }
-        /* key disimpan otomatis hanya SETELAH scan berhasil & user setuju */
-    
+
     btnAi.disabled = true;
     statusEl.style.color = "var(--text-muted)";
     statusEl.textContent = "Membaca file...";
 
-    var mime = file.type || (/\.pdf$/i.test(file.name) ? "application/pdf" : "image/jpeg");
     var reader = new FileReader();
     reader.onerror = function () {
       btnAi.disabled = false;
       statusEl.textContent = "Gagal membaca file.";
     };
     reader.onload = function (ev) {
-      var b64 = String(ev.target.result).split(",")[1] || "";
+      var dataUrl = String(ev.target.result);
+      var isPdf = /application\/pdf/i.test(file.type || "") || /\.pdf$/i.test(file.name || "");
       var prompt =
         "Kamu asisten yang mengubah dokumen jadwal pelajaran sekolah menjadi JSON. " +
         "Ambil jadwal dari dokumen ini. " +
@@ -1451,18 +1450,25 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         "Aturan:\n" +
         "1. Balas HANYA JSON valid tanpa teks lain, format persis:\n" +
         '{"jadwal":{"Senin":[{"jam_ke":"1","mulai":"07:00","selesai":"07:40","mapel":"Matematika","tipe":"pelajaran"}]},"catatan":"ringkasan"}\n' +
-        "2. Kunci hari boleh Minggu-Sabtu; hari yang tidak ada di dokumen boleh dihilangkan.\n" +
+        "2. Kunci hari boleh Minggu-Sabtu; hari yang tidak ada boleh dihilangkan.\n" +
         '3. tipe hanya "pelajaran", "istirahat", atau "upacara".\n' +
         '4. mulai/selesai format "HH:MM" 24 jam.\n' +
-        "5. Jika jam tidak tertulis di dokumen, buat jam masuk akal: mulai 07:00, tiap pelajaran 40 menit, istirahat 15 menit setelah pelajaran ke-3.\n" +
+        "5. Jika jam tidak tertulis, buat jam masuk akal: mulai 07:00, tiap pelajaran 40 menit, istirahat 15 menit setelah pelajaran ke-3.\n" +
         '6. jam_ke = nomor urut jam pelajaran (string); untuk istirahat/upacara boleh "".\n' +
         "7. catatan: satu kalimat ringkas tentang apa yang diambil (mis. kelas mana).\n" +
         "Jika dokumen memuat beberapa kelas, ikuti instruksi pengguna untuk memilih kelasnya.";
 
+      var contentParts = [{ type: "text", text: prompt }];
+      if (isPdf) {
+        contentParts.push({ type: "file", file: { url: dataUrl } });
+      } else {
+        contentParts.push({ type: "image_url", image_url: { url: dataUrl } });
+      }
       var body = {
-        contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data: b64 } }] }],
-        generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
+        messages: [{ role: "user", content: contentParts }],
+        temperature: 0.1
       };
+      if (isPdf) body.plugins = [{ id: "file-parser", pdf: { engine: "pdf-text" } }];
 
       var i = 0, lastErr = "tidak diketahui";
       function coba() {
@@ -1473,25 +1479,31 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
           return;
         }
         var model = ALAT_AI_MODELS[i++];
+        body.model = model;
         statusEl.textContent = "AI sedang memetakan dokumen (" + model + ")...";
-        fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + encodeURIComponent(apiKey), {
+        fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Authorization": "Bearer " + apiKey,
+            "Content-Type": "application/json",
+            "HTTP-Referer": location.origin,
+            "X-Title": "YourTask"
+          },
           body: JSON.stringify(body)
         }).then(function (res) {
           return res.json().then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
         }).then(function (r) {
           if (!r.ok) {
             var msg = (r.data && r.data.error && r.data.error.message) || ("HTTP " + r.status);
-            if (r.status === 429) msg = "Kuota gratis habis untuk sekarang — coba lagi nanti.";
-            else if (r.status === 400 && /api key/i.test(msg)) msg = "API key tidak valid.";
+            if (r.status === 429) msg = "Limit model gratis habis — coba lagi nanti/besok.";
+            else if (r.status === 401) msg = "API key tidak valid.";
+            else if (r.status === 402 || /credit/i.test(msg)) msg = "Model ini butuh kredit — pakai model :free.";
             lastErr = msg;
             coba();
             return;
           }
-          var cand = r.data && r.data.candidates && r.data.candidates[0];
-          var text = (cand && cand.content && cand.content.parts)
-            ? cand.content.parts.map(function (p) { return p.text || ""; }).join("")
+          var text = (r.data && r.data.choices && r.data.choices[0] && r.data.choices[0].message)
+            ? (r.data.choices[0].message.content || "")
             : "";
           text = text.replace(/^```(?:json)?/i, "").replace(/```\s*$/, "").trim();
           var obj;
@@ -1645,9 +1657,9 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     insAi.style.cssText = "flex:2;min-width:0;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--line);background-color:var(--navy-700);color:var(--text);font-family:inherit;font-size:12.5px";
     aiRow.appendChild(fileAi); aiRow.appendChild(insAi);
     fAi.appendChild(lblAi); fAi.appendChild(aiRow);
-        var keyAi = document.createElement("input");
+    var keyAi = document.createElement("input");
     keyAi.type = "password";
-    keyAi.placeholder = "Gemini API key (disimpan lokal)";
+    keyAi.placeholder = "OpenRouter API key (disimpan lokal)";
     var keyTersimpan = "";
     try { keyTersimpan = localStorage.getItem(ALAT_AI_KEY_STORE) || ""; } catch (e) {}
     keyAi.value = keyTersimpan;
@@ -1678,7 +1690,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         aiStatus.textContent = "🔑 Key tersimpan: •••• " + keyTersimpan.slice(-4);
         aiStatus.style.color = "var(--teal-400)";
       } else {
-        aiStatus.textContent = "Key gratis: aistudio.google.com → Create API key. File diproses langsung ke Google, tidak disimpan.";
+        aiStatus.textContent = "Key gratis: openrouter.ai/settings/keys → Create Key. PDF & gambar, model :free (200 req/hari).";
         aiStatus.style.color = "var(--text-muted)";
       }
     }
