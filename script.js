@@ -12,7 +12,7 @@
 
   /* --- STATE & ELEMEN --- */
   var tugasList = [];
-  var JADWAL = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+  var JADWAL = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
   var currentUsername = "";
   var currentSchool = "";
   var filterAktif = "aktif";
@@ -160,17 +160,17 @@
       if (raw) {
         JADWAL = JSON.parse(raw);
       } else {
-        JADWAL = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+        JADWAL = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
       }
     } catch (e) {
-      JADWAL = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+      JADWAL = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
       localStorage.removeItem(SCHEDULE_KEY);
     }
   }
 
   function simpanJadwal() {
     try {
-      for (var i = 1; i <= 6; i++) {
+      for (var i = 0; i <= 6; i++) {
         if (JADWAL[i]) JADWAL[i] = urutkanJadwal(JADWAL[i]);
       }
       localStorage.setItem(SCHEDULE_KEY, JSON.stringify(JADWAL));
@@ -1053,7 +1053,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       if (raw) {
         var arr = JSON.parse(raw);
         if (Array.isArray(arr)) {
-          var bersih = arr.filter(function (d) { return d >= 1 && d <= 6; })
+          var bersih = arr.filter(function (d) { return d >= 0 && d <= 6; })
                           .sort(function (a, b) { return a - b; });
           if (bersih.length > 0) hariAktif = bersih;
         }
@@ -1076,7 +1076,6 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     renderTugas();
     cekNotifikasi();
   }
-
   var ALAT_DAY_RE = /(senin|selasa|rabu|kamis|jum[''’]?at|sabtu|minggu)/i;
   var ALAT_TIME_RE = /(\d{1,2})\s*[.:]\s*(\d{2})\s*(?:s\s*\/\s*d|s\.?\s*d\.?|sd|sampai|hingga|[-–—])?\s*(\d{1,2})\s*[.:]\s*(\d{2})/i;
 
@@ -1106,11 +1105,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       var mDay = head.slice(0, 24).match(ALAT_DAY_RE);
       if (mDay) {
         var dIdx = alatHariKeIndex(mDay[1]);
-        if (dIdx === 0) {
-          peringatan.push("Baris " + (i + 1) + ": Minggu dilewati (Senin-Sabtu).");
-          currentDay = null; lastEnd = null; lastDur = null; lastJamKe = 0;
-          return;
-        }
+        
         currentDay = dIdx;
         if (!hasil[dIdx]) hasil[dIdx] = [];
         lastEnd = null; lastDur = null; lastJamKe = 0;
@@ -1213,7 +1208,6 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     var jadwal = (obj && obj.jadwal) ? obj.jadwal : {};
     Object.keys(jadwal).forEach(function (namaHari) {
       var dIdx = alatHariKeIndex(namaHari);
-      if (dIdx === 0) { peringatan.push("Minggu dilewati (Senin-Sabtu)."); return; }
       if (dIdx < 0) { peringatan.push('Hari "' + namaHari + '" tidak dikenal, dilewati.'); return; }
       var rows = Array.isArray(jadwal[namaHari]) ? jadwal[namaHari] : [];
       var list = [];
@@ -1293,7 +1287,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         "Aturan:\n" +
         "1. Balas HANYA JSON valid tanpa teks lain, format persis:\n" +
         '{"jadwal":{"Senin":[{"jam_ke":"1","mulai":"07:00","selesai":"07:40","mapel":"Matematika","tipe":"pelajaran"}]},"catatan":"ringkasan"}\n' +
-        "2. Kunci hari hanya Senin-Sabtu (tanpa Minggu); hari yang tidak ada di dokumen boleh dihilangkan.\n" +
+        "2. Kunci hari boleh Minggu-Sabtu; hari yang tidak ada di dokumen boleh dihilangkan.\n" +
         '3. tipe hanya "pelajaran", "istirahat", atau "upacara".\n' +
         '4. mulai/selesai format "HH:MM" 24 jam.\n' +
         "5. Jika jam tidak tertulis di dokumen, buat jam masuk akal: mulai 07:00, tiap pelajaran 40 menit, istirahat 15 menit setelah pelajaran ke-3.\n" +
@@ -1417,7 +1411,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     lblHari.textContent = "Hari sekolah aktif:";
     var boxHari = document.createElement("div");
     boxHari.style.cssText = "display:flex;flex-wrap:wrap;gap:10px";
-    [1, 2, 3, 4, 5, 6].forEach(function (d) {
+    [0, 1, 2, 3, 4, 5, 6].forEach(function (d) {
       var lab = document.createElement("label");
       lab.style.cssText = "display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer";
       var cb = document.createElement("input");
