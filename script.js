@@ -7,6 +7,12 @@
   var USER_KEY = "yourtask_username";
   var SCHOOL_KEY = "yourtask_school";
   var TZ = "Asia/Jakarta";
+  var TZ_KEY = "yourtask_timezone";
+  var TZ_AUTO = "auto";
+  function deteksiZona() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || TZ; } catch (e) { return TZ; }
+  }
+  var currentTZ = TZ;
 
   var NAMA_HARI = { 0: "Minggu", 1: "Senin", 2: "Selasa", 3: "Rabu", 4: "Kamis", 5: "Jumat", 6: "Sabtu" };
 
@@ -125,6 +131,8 @@
   function mirrorStateToIDB() {
     idbPut("tasks", tugasList);
     idbPut("schedule", JADWAL);
+        idbPut("timezone", currentTZ);
+    
   }
 
   /* --- LOAD & SAVE DATA --- */
@@ -148,6 +156,9 @@
         localStorage.setItem(SCHOOL_KEY, currentSchool);
       }
       if (el.displaySekolah) el.displaySekolah.textContent = currentSchool;
+            var savedTZ = null;
+      try { savedTZ = localStorage.getItem(TZ_KEY); } catch (e) {}
+      currentTZ = (savedTZ && savedTZ !== TZ_AUTO && savedTZ !== "") ? savedTZ : deteksiZona();
 
     } catch (e) {
       console.error("Gagal memuat profil", e);
@@ -238,7 +249,9 @@
       jadwal: JADWAL,
       username: currentUsername,
       sekolah: currentSchool,
-      hariAktif: hariAktif
+      hariAktif: hariAktif,
+            timezone: currentTZ
+    
     };
     var blob = new Blob([JSON.stringify(dataExport, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
@@ -256,11 +269,17 @@
     reader.onload = function(ev) {
       try {
         var parsed = JSON.parse(ev.target.result);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Format backup tidak valid");
         if (parsed.tugas) localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed.tugas));
         if (parsed.jadwal) localStorage.setItem(SCHEDULE_KEY, JSON.stringify(parsed.jadwal));
         if (parsed.username) localStorage.setItem(USER_KEY, parsed.username);
         if (parsed.sekolah) localStorage.setItem(SCHOOL_KEY, parsed.sekolah);
         if (parsed.hariAktif) localStorage.setItem("yourtask_hari_aktif", JSON.stringify(parsed.hariAktif));
+        if (parsed.timezone && /^[A-Za-z_]+\/[A-Za-z_+\-0-9]+$/.test(parsed.timezone)) {
+          currentTZ = parsed.timezone;
+          try { localStorage.setItem(TZ_KEY, currentTZ); } catch (e) {}
+                }
+        
 
         showToast("Data berhasil di-restore! Memuat ulang...");
         setTimeout(function() { location.reload(); }, 1200);
@@ -273,7 +292,7 @@
   
   function nowWIB() {
     var parts = new Intl.DateTimeFormat("id-ID", {
-      timeZone: TZ, weekday: "long", year: "numeric", month: "2-digit",
+      timeZone: currentTZ, weekday: "long", year: "numeric", month: "2-digit",
       day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
     }).formatToParts(new Date());
 
@@ -329,7 +348,22 @@
     while (noKey.length) hasil.push(noKey.shift());
     return hasil;
   }
-
+  function terapkanLabelZona() {
+    var label = currentTZ;
+    try {
+      var parts = new Intl.DateTimeFormat("en-US", { timeZone: currentTZ, timeZoneName: "short" }).formatToParts(new Date());
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].type === "timeZoneName") { label = parts[i].value; break; }
+      }
+    } catch (e) {}
+    var zc = document.getElementById("clock-zone");
+    if (zc) zc.textContent = label;
+    ["input-jadwal-mulai", "input-jadwal-selesai", "input-edit-mulai", "input-edit-selesai"].forEach(function (id) {
+      var lb = document.querySelector('label[for="' + id + '"]');
+      if (lb) lb.textContent = lb.textContent.replace(/\s*\([^)]*\)\s*$/, "") + " (" + label + ")";
+    });
+  }
+  
   function tickJam() {
     var n = nowWIB();
     if (el.jam) el.jam.textContent = pad(n.jam) + ":" + pad(n.menit) + ":" + pad(n.detik);
@@ -773,7 +807,8 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     muatJadwal();
     muatTugas();
     mirrorStateToIDB();
-
+    terapkanLabelZona();
+    
     /* jamKe tidak lagi wajib di HTML — divalidasi manual per tipe */
     if (el.inputJadwalJamKe) el.inputJadwalJamKe.required = false;
     if (el.inputEditJamKe) el.inputEditJamKe.required = false;
@@ -800,6 +835,8 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       el.btnEditUser.addEventListener("click", function() {
         if (el.inputUsername) el.inputUsername.value = currentUsername;
         if (el.inputSekolah) el.inputSekolah.value = currentSchool;
+        var selTZ = document.getElementById("input-timezone");
+        if (selTZ) { selTZ.value = (currentTZ === deteksiZona()) ? TZ_AUTO : currentTZ; if (selTZ.selectedIndex === -1) selTZ.value = TZ_AUTO; }
         if (el.modalProfil) el.modalProfil.hidden = false;
       });
     }
@@ -817,6 +854,14 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         var valSchool = el.inputSekolah ? el.inputSekolah.value.trim() : "";
         if(valUser) { currentUsername = valUser; localStorage.setItem(USER_KEY, currentUsername); if (el.displayUser) el.displayUser.textContent = currentUsername; }
         if(valSchool) { currentSchool = valSchool; localStorage.setItem(SCHOOL_KEY, currentSchool); if (el.displaySekolah) el.displaySekolah.textContent = currentSchool; }
+        var selTZ = document.getElementById("input-timezone");
+        if (selTZ) {
+          currentTZ = (selTZ.value === TZ_AUTO) ? deteksiZona() : selTZ.value;
+          try { localStorage.setItem(TZ_KEY, selTZ.value); } catch (e) {}
+          if (typeof idbPut === "function") idbPut("timezone", currentTZ);
+          terapkanLabelZona();
+          tickJam(); updateStatusKBM(); renderJadwalHari();
+        }
         if (el.modalProfil) el.modalProfil.hidden = true;
         showToast("Profil berhasil diperbarui!");
       });
