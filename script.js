@@ -27,6 +27,10 @@
   var toastTimer = null;
   var selectedScheduleIndex = null;
   var hariAktif = [1, 2, 3, 4, 5, 6];
+  var editTaskId = null;
+  var filterMapel = "semua";
+  var cariTugas = "";
+  
 
   var el = {};
   function grab() {
@@ -100,6 +104,13 @@
     el.previewDeadline = document.getElementById("preview-deadline");
     el.formError = document.getElementById("form-error");
     el.toast = document.getElementById("toast");
+    el.cariTugas = document.getElementById("cari-tugas");
+    el.filterMapel = document.getElementById("filter-mapel");
+    el.modalTitle = document.getElementById("modal-title");
+    el.btnSubmitTugas = document.getElementById("btn-submit-tugas");
+    el.inputBerulang = document.getElementById("input-berulang");
+    el.inputBackupNama = document.getElementById("input-backup-nama");
+    
   }
 
   /* --- MIRROR KE INDEXEDDB (dibaca oleh Service Worker) --- */
@@ -253,14 +264,19 @@
             timezone: currentTZ
     
     };
+     var namaCustom = el.inputBackupNama ? el.inputBackupNama.value.trim() : "";
+    try { localStorage.setItem("yourtask_backup_nama", namaCustom); } catch (err) {}
+    var d = new Date();
+    var pad2 = function (x) { return (x < 10 ? "0" : "") + x; };
+    var stamp = d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + "_" + pad2(d.getHours()) + "-" + pad2(d.getMinutes());
+    var aman = namaCustom.replace(/[\\\/:*?"<>|]/g, "").trim();
     var blob = new Blob([JSON.stringify(dataExport, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'YourTask_Backup_' + Date.now() + '.json';
+    a.download = (aman || ("YourTask_Backup_" + stamp)) + ".json";
     a.click();
-    URL.revokeObjectURL(url);
-  }
+    URL.revokeObjectURL(url); 
 
   function importData(e) {
     var file = e.target.files[0];
@@ -270,6 +286,8 @@
       try {
         var parsed = JSON.parse(ev.target.result);
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Format backup tidak valid");
+        if (parsed.tugas && !Array.isArray(parsed.tugas)) throw new Error("Data tugas tidak valid");
+        if (parsed.jadwal && (typeof parsed.jadwal !== "object" || Array.isArray(parsed.jadwal))) throw new Error("Data jadwal tidak valid");
         if (parsed.tugas) localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed.tugas));
         if (parsed.jadwal) localStorage.setItem(SCHEDULE_KEY, JSON.stringify(parsed.jadwal));
         if (parsed.username) localStorage.setItem(USER_KEY, parsed.username);
@@ -586,9 +604,13 @@
     if (!el.daftarTugas) return;
     var frag = document.createDocumentFragment();
     var terlihat = tugasList.filter(function (t) {
-      if (filterAktif === "aktif") return !t.completed;
-      if (filterAktif === "selesai") return t.completed;
+    if (filterAktif === "aktif" && t.completed) return false;
+    if (filterAktif === "selesai" && !t.completed) return false;
+    if (filterMapel !== "semua" && normalisasi(t.mapel) !== normalisasi(filterMapel)) return false;
+    if (cariTugas && (t.mapel + " " + t.detail).toLowerCase().indexOf(cariTugas) === -1) return false;
       return true;
+    });
+    
     });
     terlihat.sort(function (a, b) {
       if (a.completed !== b.completed) return a.completed ? 1 : -1;
@@ -607,7 +629,24 @@
     if (el.ringkasan) el.ringkasan.textContent = total === 0 ? "Belum ada tugas" : (aktif + " tugas aktif dari " + total + " total");
   }
 
-  function buatItemTugas(t) {
+  function isiFilterMapel() {
+    if (!el.filterMapel) return;
+    var sekarang = filterMapel;
+    var unik = [];
+    tugasList.forEach(function (t) {
+      if (unik.indexOf(t.mapel) === -1) unik.push(t.mapel);
+    });
+    el.filterMapel.innerHTML = '<option value="semua">— Semua mapel —</option>';
+    unik.sort().forEach(function (m) {
+      var o = document.createElement("option");
+      o.value = m; o.textContent = m;
+      el.filterMapel.appendChild(o);
+    });
+    el.filterMapel.value = (unik.indexOf(sekarang) !== -1 || sekarang === "semua") ? sekarang : "semua";
+    filterMapel = el.filterMapel.value;
+  }
+  
+    function buatItemTugas(t) {
     var li = document.createElement("li"); li.className = "task-item";
     var dl = cariDeadline(t.mapel);
     var urgent = !t.completed && dl.ada && dl.selisihJam <= 24;
@@ -619,12 +658,18 @@
     check.className = "task-check";
     check.innerHTML = '<span class="tick" aria-hidden="true">&#10003;</span>';
     check.onclick = function () {
-      t.completed = !t.completed;
+      if (!t.completed && t.berulang === "mingguan") {
+        t.dibuat = Date.now();
+        showToast("Tugas mingguan direset — deadline pindah ke pekan berikutnya.");
+      } else {
+        t.completed = !t.completed;
+      }
       simpanTugas(); renderTugas(); cekNotifikasi();
-      if('vibrate' in navigator) navigator.vibrate(50);
+      if ('vibrate' in navigator) navigator.vibrate(50);
     };
 
     var body = document.createElement("div"); body.className = "task-body";
+    body.onclick = function () { if (!t.completed) bukaModalEdit(t); };
     var mapel = document.createElement("span"); mapel.className = "task-mapel"; mapel.textContent = t.mapel;
     var detail = document.createElement("span"); detail.className = "task-detail"; detail.textContent = t.detail;
 
@@ -636,6 +681,12 @@
       tagDl.className = "tag tag-deadline";
       tagDl.textContent = dl.label + " · " + dl.mulai + (dl.jamKe ? " (Jam ke-" + dl.jamKe + ")" : "");
       meta.appendChild(tagDl);
+      if (t.berulang === "mingguan") {
+        var tagR = document.createElement("span");
+        tagR.className = "tag tag-repeat";
+        tagR.textContent = "⟳ Mingguan";
+        meta.appendChild(tagR);
+      }
       if (urgent) {
         var tagUrgent = document.createElement("span");
         tagUrgent.className = "tag tag-urgent";
@@ -659,6 +710,31 @@
     li.appendChild(check); li.appendChild(body); li.appendChild(del);
     return li;
   }
+
+  function bukaModalEdit(t) {
+    editTaskId = t.id;
+    isiDropdownMapel();
+    if (el.inputMapel) el.inputMapel.value = t.mapel;
+    if (el.inputDetail) el.inputDetail.value = t.detail;
+    if (el.inputBerulang) el.inputBerulang.value = t.berulang || "tidak";
+    if (el.modalTitle) el.modalTitle.textContent = "Edit Tugas";
+    if (el.btnSubmitTugas) el.btnSubmitTugas.textContent = "Simpan Perubahan";
+    updatePreviewDeadline();
+    if (el.formError) el.formError.hidden = true;
+    if (el.overlay) el.overlay.hidden = false;
+  }
+
+  function bersihkanTugasHarian() {
+    var hariIni = new Date().toDateString();
+    var berubah = false;
+    tugasList.forEach(function (t) {
+      if (t.berulang === "hari_ini" && !t.completed && new Date(t.dibuat).toDateString() !== hariIni) {
+        t.completed = true; berubah = true;
+      }
+    });
+    if (berubah) { simpanTugas(); renderTugas(); cekNotifikasi(); }
+  }
+  
   
   function cekNotifikasi() {
     if (!el.banner) return;
@@ -815,6 +891,18 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
 
     if (el.btnBackup) el.btnBackup.addEventListener("click", exportData);
     if (el.inputRestore) el.inputRestore.addEventListener("change", importData);
+    var btnHapusJadwal = document.getElementById("btn-hapus-jadwal");
+    if (btnHapusJadwal) {
+      btnHapusJadwal.addEventListener("click", function () {
+        if (!confirm("HAPUS SEMUA JADWAL di semua hari? Tugas tidak ikut terhapus. Lanjutkan?")) return;
+        JADWAL = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+        simpanJadwal(); mirrorStateToIDB();
+        isiDropdownMapel(); renderJadwalHari(); updateStatusKBM();
+        if (el.modalProfil) el.modalProfil.hidden = true;
+        showToast("Semua data jadwal dihapus.");
+      });
+    }
+    
 
     var n = nowWIB();
     hariDipilih = (JADWAL[n.dayIndex] && JADWAL[n.dayIndex].length > 0) ? n.dayIndex : 1;
@@ -822,7 +910,15 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       notifDiizinkan = true;
       registerPeriodicSync();
     }
+    if (el.inputBackupNama) {
+      var savedNama = null;
+      try { savedNama = localStorage.getItem("yourtask_backup_nama"); } catch (err) {}
+      if (savedNama) el.inputBackupNama.value = savedNama;
+    }
 
+    var qs = new URLSearchParams(location.search);
+    if (qs.get("action") === "tambah-tugas" && el.btnBuka) el.btnBuka.click();
+    
     isiDropdownMapel();
     tickJam();
     updateStatusKBM();
@@ -1051,6 +1147,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         e.preventDefault();
         var mapel = el.inputMapel ? el.inputMapel.value : "";
         var detail = el.inputDetail ? el.inputDetail.value.trim() : "";
+        var berulang = el.inputBerulang ? el.inputBerulang.value : "tidak";
         if (!mapel || !detail) {
           if (el.formError) {
             el.formError.textContent = "Mohon lengkapi formulir.";
@@ -1058,12 +1155,22 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
           }
           return;
         }
-        tugasList.push({ id: "t" + Date.now(), mapel: mapel, detail: detail, completed: false, dibuat: Date.now() });
+        if (editTaskId) {
+          var tg = tugasList.find(function (x) { return x.id === editTaskId; });
+          if (tg) { tg.mapel = mapel; tg.detail = detail; tg.berulang = berulang; }
+          editTaskId = null;
+          if (el.modalTitle) el.modalTitle.textContent = "Tambah Tugas";
+          if (el.btnSubmitTugas) el.btnSubmitTugas.textContent = "Simpan Tugas";
+          showToast("Tugas diperbarui.");
+        } else {
+          tugasList.push({ id: "t" + Date.now(), mapel: mapel, detail: detail, completed: false, dibuat: Date.now(), berulang: berulang });
+          showToast("Tugas dicatat.");
+        }
         simpanTugas(); renderTugas(); cekNotifikasi();
         if (el.overlay) el.overlay.hidden = true;
-        showToast("Tugas dicatat.");
       });
     }
+
 
     if (el.btnIzinNotif) {
       el.btnIzinNotif.addEventListener("click", mintaIzinNotifikasi);
@@ -1076,14 +1183,25 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         c.classList.add("is-active"); filterAktif = c.dataset.filter; renderTugas();
       });
     });
-
+    
+    isiFilterMapel();
+    if (el.filterMapel) {
+      el.filterMapel.addEventListener("change", function () { filterMapel = el.filterMapel.value; renderTugas(); });
+    }
+    if (el.cariTugas) {
+      el.cariTugas.addEventListener("input", function () {
+        cariTugas = el.cariTugas.value.trim().toLowerCase();
+        renderTugas();
+      });
+    }
+    
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(function(err) {});
     }
 
     setInterval(tickJam, 1000);
     setInterval(function () { updateStatusKBM(); if (hariDipilih === nowWIB().dayIndex) renderJadwalHari(); }, 15000);
-    setInterval(function () { renderTugas(); cekNotifikasi(); }, 60000);
+    setInterval(function () { bersihkanTugasHarian(); renderTugas(); cekNotifikasi(); }, 60000);
   }
 
   muatHariAktif();
@@ -1588,11 +1706,6 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     keyAi.addEventListener("keydown", function (e) {
       if (e.key === "Enter") { e.preventDefault(); alatSimpanKey(); }
     });
-    
-    var aiStatus = document.createElement("p");
-    aiStatus.style.cssText = "margin:6px 0 0;font-size:11.5px;color:var(--text-muted)";
-    aiStatus.textContent = "Key gratis: aistudio.google.com → Create API key. File diproses langsung ke Google, tidak disimpan.";
-    fAi.appendChild(aiStatus);
     
     var preview = document.createElement("div");
     preview.id = "alat-preview";
