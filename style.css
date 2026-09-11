@@ -116,10 +116,10 @@ main { display: flex; flex-direction: column; gap: 16px; }
 .schedule-row.is-break .schedule-mapel, .schedule-row.is-break .schedule-time { color: var(--text-muted); font-weight: 500; font-style: italic; }
 .schedule-now-tag { flex-shrink: 0; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--teal-400); }
 
-.modal-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; padding: 16px; background-color: rgba(3, 7, 18, 0.7); backdrop-filter: blur(3px); animation: fade-in 0.2s ease; }
+.modal-overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; padding: 16px; background-color: rgba(3, 7, 18, 0.7); backdrop-filter: blur(3px); animation: fade-in 0.3s ease; }
 @media (min-width: 640px) { .modal-overlay { align-items: center; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-.modal { width: 100%; max-width: 440px; padding: 18px; border-radius: 18px; border: 1px solid var(--line); background-color: var(--navy-800); box-shadow: var(--shadow); animation: slide-up 0.26s cubic-bezier(0.22, 1, 0.36, 1); }
+.modal { width: 100%; max-width: 440px; padding: 18px; border-radius: 18px; border: 1px solid var(--line); background-color: var(--navy-800); box-shadow: var(--shadow); animation: slide-up 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
 @keyframes slide-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
 .modal-head h2 { font-size: 17px; font-weight: 700; }
@@ -150,38 +150,39 @@ main { display: flex; flex-direction: column; gap: 16px; }
 /* ===== Alat Jadwal: petunjuk format (collapsible slide) ===== */
 .alat-cara { margin-top: 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background-color: rgba(20, 184, 166, 0.05); overflow: hidden; }
 .alat-cara-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border: 0; background: transparent; color: var(--teal-400); font-size: 12.5px; font-weight: 700; cursor: pointer; }
-.alat-cara-chev { font-style: normal; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+.alat-cara-chev { font-style: normal; transition: transform 0.4s var(--ease-out); }
 .alat-cara.is-open .alat-cara-chev { transform: rotate(180deg); }
-.alat-cara-body { max-height: 0; opacity: 0; overflow: hidden; transition: max-height 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s ease; }
+.alat-cara-body { max-height: 0; opacity: 0; overflow: hidden; transition: max-height 0.5s var(--ease-out), opacity 0.4s ease; }
 .alat-cara.is-open .alat-cara-body { max-height: 340px; opacity: 1; }
 .alat-cara-body ul { margin: 0; padding: 2px 12px 12px 26px; font-size: 12px; color: var(--text-muted); line-height: 1.65; }
 .alat-cara-body li { margin-bottom: 6px; }
 .alat-cara-body b { color: var(--text); }
 .alat-cara-body code { padding: 1px 5px; border-radius: 6px; background-color: rgba(232, 237, 247, 0.08); color: var(--teal-400); font-size: 11px; }
 
-/* ===== Animasi tombol global ===== */
+/* ===== Animasi tombol global (ease-out: cepat → melambat) ===== */
+:root { --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
 
-/* Tombol utama & ghost: terangkat saat hover, tombol saat ditekan */
-.btn { will-change: transform; }
+.btn { will-change: transform; transition: transform 0.35s var(--ease-out), box-shadow 0.35s var(--ease-out), background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease; }
 .btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(3, 7, 18, 0.35); }
-.btn:active { transform: translateY(0) scale(0.96); box-shadow: none; transition-duration: 0.06s; }
+.btn:active { transform: scale(0.97); box-shadow: none; transition-duration: 0.08s; }
 
-/* Kilau lewat di tombol primary (sekali saat hover) */
+/* Kilau primary: lewat perlahan, mendarat halus */
 .btn-primary { position: relative; overflow: hidden; }
-.btn-primary::after { content: ""; position: absolute; top: 0; left: -80%; width: 50%; height: 100%; background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.35), transparent); transform: skewX(-20deg); transition: left 0.5s ease; }
+.btn-primary::after { content: ""; position: absolute; top: 0; left: -80%; width: 50%; height: 100%; background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.3), transparent); transform: skewX(-20deg); transition: left 0.55s var(--ease-out); }
 .btn-primary:hover::after { left: 130%; }
 
-/* Icon button (⚙️, ×, dll.): ikut terangkat + border teal */
-.icon-btn { transition: color 0.18s ease, border-color 0.18s ease, transform 0.18s ease, background-color 0.18s ease; }
-.icon-btn:hover { transform: translateY(-1px) rotate(8deg); background-color: rgba(20, 184, 166, 0.08); }
-.icon-btn:active { transform: scale(0.92); transition-duration: 0.06s; }
+.icon-btn { transition: color 0.25s ease, border-color 0.25s ease, background-color 0.25s ease, transform 0.35s var(--ease-out); }
+.icon-btn:hover { transform: translateY(-1px) rotate(6deg); background-color: rgba(20, 184, 166, 0.08); }
+.icon-btn:active { transform: scale(0.92); transition-duration: 0.08s; }
 
-/* Chip filter & tab hari: terangkat + pop saat jadi aktif */
-.chip { will-change: transform; }
+.chip { will-change: transform; transition: color 0.25s ease, border-color 0.25s ease, background-color 0.25s ease, transform 0.35s var(--ease-out); }
 .chip:hover { transform: translateY(-1px); border-color: rgba(20, 184, 166, 0.35); }
-.chip:active { transform: scale(0.94); transition-duration: 0.06s; }
-.chip.is-active { animation: chip-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1); }
-@keyframes chip-pop { 0% { transform: scale(0.9); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
+.chip:active { transform: scale(0.95); transition-duration: 0.08s; }
+
+/* Aktif: tumbuh mulus sampai berhenti, TANPA mantul */
+.chip.is-active { animation: chip-pop 0.45s var(--ease-out); }
+@keyframes chip-pop { 0% { transform: scale(0.9); opacity: 0.55; } 100% { transform: scale(1); opacity: 1; } }
 
 /* Fokus keyboard: halo teal biar aksesibel */
 .btn:focus-visible, .chip:focus-visible, .icon-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.55); }
+
