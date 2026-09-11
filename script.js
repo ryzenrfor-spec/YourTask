@@ -610,7 +610,12 @@
       if (cariTugas && (t.mapel + " " + t.detail).toLowerCase().indexOf(cariTugas) === -1) return false;
       return true;
     });
-    
+        terlihat.sort(function (a, b) {
+      if (a.completed !== b.completed) return a.completed ? 1 : -1;
+      var da = cariDeadline(a.mapel); var db = cariDeadline(b.mapel);
+      var va = da.ada ? da.selisihMenit : Infinity; var vb = db.ada ? db.selisihMenit : Infinity;
+      return va - vb;
+    });
 
     el.daftarTugas.innerHTML = "";
     terlihat.forEach(function (t) { frag.appendChild(buatItemTugas(t)); });
