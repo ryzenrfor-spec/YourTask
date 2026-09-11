@@ -1120,16 +1120,19 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       });
     }
 
-    if (el.btnBuka) {
+        if (el.btnBuka) {
       el.btnBuka.addEventListener("click", function() {
         if (el.form) el.form.reset();
+        editTaskId = null;
+        if (el.modalTitle) el.modalTitle.textContent = "Tambah Tugas";
+        if (el.btnSubmitTugas) el.btnSubmitTugas.textContent = "Simpan Tugas";
         if (el.formError) el.formError.hidden = true;
         isiDropdownMapel();
         updatePreviewDeadline();
         if (el.overlay) el.overlay.hidden = false;
       });
-    }
-
+        }
+    
     var btnTutupModal = document.getElementById("btn-tutup-modal");
     if (btnTutupModal) btnTutupModal.addEventListener("click", function() { if (el.overlay) el.overlay.hidden = true; });
 
