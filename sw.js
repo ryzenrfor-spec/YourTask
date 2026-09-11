@@ -1,5 +1,5 @@
-/* YourTask Service Worker - GitHub Pages Project Site (v8 - cache-first offline) */
-const CACHE_NAME = 'yourtask-cache-v8';
+/* YourTask Service Worker - GitHub Pages Project Site (v9 - repair some bugs) */
+const CACHE_NAME = 'yourtask-cache-v9';
 const BASE = '/YourTask/';
 
 const PRECACHE_URLS = [
