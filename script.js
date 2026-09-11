@@ -602,15 +602,7 @@
 
   function renderTugas() {
     if (!el.daftarTugas) return;
-    var frag = document.createDocumentFragment();
-    var terlihat = tugasList.filter(function (t) {
-    if (filterAktif === "aktif" && t.completed) return false;
-    if (filterAktif === "selesai" && !t.completed) return false;
-    if (filterMapel !== "semua" && normalisasi(t.mapel) !== normalisasi(filterMapel)) return false;
-    if (cariTugas && (t.mapel + " " + t.detail).toLowerCase().indexOf(cariTugas) === -1) return false;
-      return true;
-    });
-    
+    var frag = document.createDocumentFragment();    
     var terlihat = tugasList.filter(function (t) {
       if (filterAktif === "aktif" && t.completed) return false;
       if (filterAktif === "selesai" && !t.completed) return false;
