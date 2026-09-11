@@ -1435,10 +1435,34 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     ta.style.cssText = "width:100%;padding:11px 12px;border-radius:var(--radius-sm);border:1px solid var(--line);background-color:var(--navy-700);color:var(--text);font-family:inherit;font-size:13px;resize:vertical;box-sizing:border-box";
     fPaste.appendChild(lblPaste); fPaste.appendChild(ta);
 
-    var hint = document.createElement("p");
-    hint.className = "hint";
-    hint.textContent = "Header baris = nama hari. Tiap baris: [jam ke] jam mulai - jam selesai, lalu nama. Tulis Istirahat/Upacara tanpa jamKe — posisinya otomatis mengikuti waktu. Import hanya mengganti hari yang ada di teks.";
-    fPaste.appendChild(hint);
+        /* --- Petunjuk format: collapsible + animasi slide --- */
+    var hintWrap = document.createElement("div");
+    hintWrap.className = "alat-cara";
+
+    var hintBtn = document.createElement("button");
+    hintBtn.type = "button";
+    hintBtn.className = "alat-cara-btn";
+    hintBtn.setAttribute("aria-expanded", "false");
+    hintBtn.innerHTML = "<span>📖 Cara pakai format penulisan</span><i class=\"alat-cara-chev\">▾</i>";
+
+    var hintBody = document.createElement("div");
+    hintBody.className = "alat-cara-body";
+    hintBody.innerHTML =
+      "<ul>" +
+      "<li><b>Baris nama hari</b> (mis. <code>Senin</code>) mulai blok jadwal hari itu.</li>" +
+      "<li>Format pelajaran: <code>[jam ke] 07.40 - 08.20 Matematika</code></li>" +
+      "<li>Tulis <code>Istirahat</code> / <code>Upacara</code> tanpa nomor — posisinya otomatis mengikuti urutan jam.</li>" +
+      "<li>Import hanya mengganti hari yang ada di teks — hari lain tetap aman.</li>" +
+      "</ul>";
+
+    hintBtn.onclick = function () {
+      var buka = hintWrap.classList.toggle("is-open");
+      hintBtn.setAttribute("aria-expanded", buka ? "true" : "false");
+    };
+
+    hintWrap.appendChild(hintBtn);
+    hintWrap.appendChild(hintBody);
+    fPaste.appendChild(hintWrap);
 
     /* --- AI: PDF/gambar → jadwal --- */
     var fAi = document.createElement("div");
