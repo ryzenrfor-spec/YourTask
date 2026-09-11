@@ -611,7 +611,6 @@
       return true;
     });
     
-    });
     terlihat.sort(function (a, b) {
       if (a.completed !== b.completed) return a.completed ? 1 : -1;
       var da = cariDeadline(a.mapel); var db = cariDeadline(b.mapel);
