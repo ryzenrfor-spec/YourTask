@@ -51,7 +51,7 @@
             <span id="status-jam-ke" class="status-jamke"></span>
           </div>
           <h2 id="status-mapel" class="status-mapel">Memuat status&hellip;</h2>
-          <p id="status-detail" class="status-detail">Menyinkronkan waktu&hellip;;</p>
+          <p id="status-detail" class="status-detail">Menyinkronkan waktu&hellip;</p>
           <div class="progress-wrap" id="progress-wrap" hidden>
             <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
             <span class="progress-text" id="progress-text"></span>
@@ -83,6 +83,12 @@
             <button type="button" class="chip" data-filter="selesai">Selesai</button>
             <button type="button" class="chip" data-filter="semua">Semua</button>
           </div>
+          <div class="filter-row" style="margin-top: 8px; gap: 8px;">
+            <input type="search" id="cari-tugas" placeholder="Cari tugas / mapel…" style="flex: 1; min-width: 0;" />
+            <select id="filter-mapel" style="flex: 0 0 auto; max-width: 45%;">
+              <option value="semua">— Semua mapel —</option>
+            </select>
+          </div>
           <ul id="daftar-tugas" class="task-list"></ul>
           <p id="tugas-kosong" class="empty-state">Belum ada tugas di daftar ini. Tekan <strong>+ Tambah</strong> untuk mencatat tugas baru.</p>
         </section>
@@ -111,7 +117,7 @@
       </footer>
     </div>
 
-    <!-- ============ MODAL TAMBAH TUGAS ============ -->
+    <!-- ============ MODAL TAMBAH / EDIT TUGAS ============ -->
     <div class="modal-overlay" id="modal-overlay" hidden role="dialog" aria-modal="true">
       <div class="modal" role="document">
         <div class="modal-head">
@@ -131,13 +137,22 @@
             <input type="text" id="input-detail" maxlength="140" placeholder="Contoh: Halaman 45 nomor 1-10" required />
           </div>
           <div class="field">
+            <label for="input-berulang">Pengulangan</label>
+            <select id="input-berulang">
+              <option value="tidak">Tidak berulang</option>
+              <option value="mingguan">Berulang mingguan</option>
+              <option value="hari_ini">Hanya hari ini</option>
+            </select>
+            <p class="hint">Mingguan: saat ditandai selesai, deadline otomatis pindah ke pekan berikutnya.</p>
+          </div>
+          <div class="field">
             <span class="label-static">Deadline (otomatis)</span>
             <div class="deadline-preview" id="preview-deadline">Pilih mapel untuk melihat deadline.</div>
           </div>
           <p id="form-error" class="form-error" role="alert" hidden></p>
           <div class="modal-actions">
             <button type="button" id="btn-batal" class="btn btn-ghost">Batal</button>
-            <button type="submit" class="btn btn-primary">Simpan Tugas</button>
+            <button type="submit" id="btn-submit-tugas" class="btn btn-primary">Simpan Tugas</button>
           </div>
         </form>
       </div>
@@ -184,7 +199,7 @@
                       <option value="UTC">UTC</option>
                   </select>
                   <p class="hint">Menentukan jam masuk, status KBM &amp; deadline. "Otomatis" memakai zona perangkatmu.</p>
-                            </div>
+              </div>
             
               <hr style="border: 0; border-top: 1px dashed var(--line); margin: 20px 0 10px;">
               
@@ -195,7 +210,14 @@
                       <label for="input-restore-data" class="btn btn-ghost" style="flex: 1; font-size: 12px; height: 38px; text-align: center; cursor: pointer; margin: 0; display: inline-flex; align-items: center; justify-content: center;">📤 Restore</label>
                       <input type="file" id="input-restore-data" accept=".json" style="display: none;">
                   </div>
+                  <input type="text" id="input-backup-nama" maxlength="60" placeholder="Nama file (opsional) — kosongkan = otomatis tanggal" style="width: 100%; margin-top: 10px;" />
                   <p class="hint" style="margin-top: 8px;">Backup jadwal dan tugasmu dalam format .json</p>
+              </div>
+
+              <div class="field" style="margin-top: 14px;">
+                  <label>Zona Berbahaya</label>
+                  <button type="button" id="btn-hapus-jadwal" class="btn btn-ghost" style="width: 100%; height: 38px; font-size: 12px; color: #fda4a4; border-color: rgba(253, 164, 164, 0.4);">🗑️ Hapus Semua Data Jadwal</button>
+                  <p class="hint" style="margin-top: 8px;">Menghapus seluruh jadwal (semua hari). Tugas tidak ikut terhapus.</p>
               </div>
 
               <div class="modal-actions" style="margin-top: 24px;">
