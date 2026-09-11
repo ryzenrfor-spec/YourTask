@@ -103,9 +103,9 @@ function idbPut(key, value) {
   })).catch(() => {});
 }
 
-function getWibNow() {
+function getWibNow(tz) {
   const parts = new Intl.DateTimeFormat('id-ID', {
-    timeZone: 'Asia/Jakarta', weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false
+    timeZone: tz || 'Asia/Jakarta', weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false
   }).formatToParts(new Date());
   const v = {};
   parts.forEach((p) => { v[p.type] = p.value; });
@@ -122,8 +122,10 @@ function normalize(v) {
 async function checkBackgroundDeadlines() {
   const tasks = (await idbGet('tasks')) || [];
   const schedule = (await idbGet('schedule')) || {};
-  const activeDays = (await idbGet('activeDays')) || [1, 2, 3, 4, 5, 6];
-  const now = getWibNow();
+const activeDays = (await idbGet('activeDays')) || ;
+  let tz = (await idbGet('timezone')) || 'Asia/Jakarta';
+  if (!/^[A-Za-z_]+\/[A-Za-z_+\-0-9]+$/.test(tz)) tz = 'Asia/Jakarta';
+  const now = getWibNow(tz);[1][2][3][4][5][6]
 
   for (const task of tasks) {
     if (task.completed) continue;
