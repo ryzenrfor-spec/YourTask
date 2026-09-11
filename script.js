@@ -277,8 +277,7 @@
     a.download = (aman || ("YourTask_Backup_" + stamp)) + ".json";
     a.click();
     URL.revokeObjectURL(url); 
-  }
-
+    } 
   function importData(e) {
     var file = e.target.files[0];
     if (!file) return;
