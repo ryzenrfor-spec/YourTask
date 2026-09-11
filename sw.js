@@ -1,4 +1,4 @@
-/* YourTask Service Worker - GitHub Pages Project Site (v78-  time zone edit) */
+/* YourTask Service Worker - GitHub Pages Project Site (v8 - cache-first offline) */
 const CACHE_NAME = 'yourtask-cache-v8';
 const BASE = '/YourTask/';
 
@@ -122,10 +122,10 @@ function normalize(v) {
 async function checkBackgroundDeadlines() {
   const tasks = (await idbGet('tasks')) || [];
   const schedule = (await idbGet('schedule')) || {};
-const activeDays = (await idbGet('activeDays')) || ;
+  const activeDays = (await idbGet('activeDays')) || [1, 2, 3, 4, 5, 6];
   let tz = (await idbGet('timezone')) || 'Asia/Jakarta';
   if (!/^[A-Za-z_]+\/[A-Za-z_+\-0-9]+$/.test(tz)) tz = 'Asia/Jakarta';
-  const now = getWibNow(tz);[1][2][3][4][5][6]
+  const now = getWibNow(tz);
 
   for (const task of tasks) {
     if (task.completed) continue;
