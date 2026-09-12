@@ -1416,7 +1416,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
   }
 
   var ALAT_AI_KEY_STORE = "yourtask_gemini_key";
-  var ALAT_AI_MODELS = ["google/gemma-3-27b-it:free", "meta-llama/llama-3.2-11b-vision-instruct:free", "mistralai/mistral-small-3.1-24b-instruct:free"];
+  var ALAT_AI_MODELS = ["google/gemma-4-26b-a4b-it:free", "google/gemma-4-31b-it:free", "inclusionai/ling-3.0-flash-vl:free", "openrouter/free"];
   var alatParsedTerakhir = null;
 
   function alatScanAI(file, instruksi, apiKey, statusEl, btnAi, onOk) {
