@@ -1,5 +1,5 @@
-/* YourTask Service Worker - GitHub Pages Project Site (v15 - change AI API key) */
-const CACHE_NAME = 'yourtask-cache-v15';
+/* YourTask Service Worker - GitHub Pages Project Site (v16 - change AI API key) */
+const CACHE_NAME = 'yourtask-cache-v16';
 const BASE = '/YourTask/';
 
 const PRECACHE_URLS = [
