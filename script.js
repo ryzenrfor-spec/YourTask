@@ -1444,19 +1444,20 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       var dataUrl = String(ev.target.result);
       var isPdf = /application\/pdf/i.test(file.type || "") || /\.pdf$/i.test(file.name || "");
       var prompt =
-        "Kamu asisten yang mengubah dokumen jadwal pelajaran sekolah menjadi JSON. " +
+        "Kamu mesin pengubah dokumen jadwal pelajaran sekolah (tabel, teks berantakan hasil ekstrak PDF, atau foto) menjadi JSON. " +
         "Ambil jadwal dari dokumen ini. " +
-        (instruksi ? "Instruksi pengguna: " + instruksi + "\n" : "\n") +
-        "Aturan:\n" +
-        "1. Balas HANYA JSON valid tanpa teks lain, format persis:\n" +
-        '{"jadwal":{"Senin":[{"jam_ke":"1","mulai":"07:00","selesai":"07:40","mapel":"Matematika","tipe":"pelajaran"}]},"catatan":"ringkasan"}\n' +
-        "2. Kunci hari boleh Minggu-Sabtu; hari yang tidak ada boleh dihilangkan.\n" +
-        '3. tipe hanya "pelajaran", "istirahat", atau "upacara".\n' +
-        '4. mulai/selesai format "HH:MM" 24 jam.\n' +
-        "5. Jika jam tidak tertulis, buat jam masuk akal: mulai 07:00, tiap pelajaran 40 menit, istirahat 15 menit setelah pelajaran ke-3.\n" +
-        '6. jam_ke = nomor urut jam pelajaran (string); untuk istirahat/upacara boleh "".\n' +
-        "7. catatan: satu kalimat ringkas tentang apa yang diambil (mis. kelas mana).\n" +
-        "Jika dokumen memuat beberapa kelas, ikuti instruksi pengguna untuk memilih kelasnya.";
+        (instruksi ? "Instruksi pengguna (WAJIB diikuti, mis. pilih kelas/fase yang disebut): " + instruksi + "\n" : "\n") +
+        "Aturan output:\n" +
+        "1. Balas HANYA JSON valid tanpa teks lain, tanpa markdown. Bentuk persis:\n" +
+        '{"jadwal":{"Senin":[{"jam_ke":"1","mulai":"07:00","selesai":"07:40","mapel":"Matematika","tipe":"pelajaran"}]},"catatan":"satu kalimat"}\n' +
+        "2. Kunci objek jadwal WAJIB ada dan berisi nama hari bahasa Indonesia: Senin, Selasa, Rabu, Kamis, Jumat, Sabtu, Minggu. Hari kosong boleh dihilangkan.\n" +
+        "3. Setiap baris WAJIB punya mulai & selesai format HH:MM (24 jam). Data berantakan WAJIB kamu rapikan.\n" +
+        "4. Jika tabel hanya berisi nomor jam (jam_ke) tanpa jam, rekonstruksi jamnya: pelajaran ke-1 mulai 07:00, tiap pelajaran 40 menit, istirahat 15 menit setelah pelajaran ke-3, urutan tidak tumpang tindih.\n" +
+        '5. Jika satu sel berisi rentang jam (contoh "07.00-07.40" atau "07:00 s.d. 07:40"), pecah jadi mulai "07:00" dan selesai "07:40".\n' +
+        '6. tipe hanya "pelajaran", "istirahat", atau "upacara". Nama mapel ditulis bersih (mis. "MTK" jadi "Matematika" bila jelas).\n' +
+        '7. jam_ke = nomor urut jam pelajaran (string); untuk istirahat/upacara boleh "".\n' +
+        "8. Teks hasil ekstrak PDF sering acak (kolom menumpuk, urutan kacau). TETAP USAHA memetakan baris-barisnya ke format di atas.\n" +
+        "9. HANYA jika benar-benar tidak ada jadwal di dokumen, balas {\"jadwal\":{},\"catatan\":\"alasan singkat\"}.\n";
 
       var contentParts = [{ type: "text", text: prompt }];
       if (isPdf) {
@@ -1470,12 +1471,68 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       };
       if (isPdf) body.plugins = [{ id: "file-parser", pdf: { engine: "pdf-text" } }];
 
-      var i = 0, lastErr = "tidak diketahui";
+      /* --- perapian jawaban AI sebelum dinormalisasi --- */
+      function rapikan(obj) {
+        if (!obj || typeof obj !== "object") return null;
+        var HARI = ["senin", "selasa", "rabu", "kamis", "jumat", "sabtu", "minggu"];
+        var jadwal = obj.jadwal || obj.schedule || obj.hari || null;
+        if (!jadwal) {
+          var ketemu = false, tmp = {};
+          Object.keys(obj).forEach(function (k) {
+            if (HARI.indexOf(String(k).toLowerCase().trim()) !== -1) { tmp[k] = obj[k]; ketemu = true; }
+          });
+          if (!ketemu) return null;
+          jadwal = tmp;
+        }
+        var out = { jadwal: {}, catatan: obj.catatan || obj.note || "" };
+        Object.keys(jadwal).forEach(function (hari) {
+          var rows = jadwal[hari];
+          if (!Array.isArray(rows)) {
+            if (rows && typeof rows === "object") rows = Object.keys(rows).map(function (k) { return rows[k]; });
+            else rows = [];
+          }
+          out.jadwal[hari] = rows.map(function (r0) {
+            var r = {};
+            if (Array.isArray(r0)) { r.mulai = r0[0]; r.selesai = r0[1]; r.mapel = r0[2]; r.jam_ke = r0[3]; r.tipe = r0[4]; return r; }
+            if (!r0 || typeof r0 !== "object") return r;
+            Object.keys(r0).forEach(function (k0) {
+              var k = String(k0).toLowerCase().trim();
+              if (k === "mata_pelajaran" || k === "matpel" || k === "subject" || k === "pelajaran") k = "mapel";
+              if (k === "jam" || k === "waktu" || k === "jam_mulai_selesai") k = "waktu";
+              if (k === "jamke" || k === "jam ke" || k === "jam ke-" || k === "no") k = "jam_ke";
+              if (k === "start" || k === "dari") k = "mulai";
+              if (k === "end" || k === "sampai") k = "selesai";
+              r[k] = r0[k0];
+            });
+            if (r.waktu && (!r.mulai || !r.selesai)) {
+              var wm = String(r.waktu).match(/(\d{1,2})[.:](\d{2})\D+(\d{1,2})[.:](\d{2})/);
+              if (wm) { r.mulai = wm[1] + ":" + wm[2]; r.selesai = wm[3] + ":" + wm[4]; }
+            }
+            var jkM = String(r.jam_ke == null ? "" : r.jam_ke).match(/\d+/);
+            if ((!r.mulai || !r.selesai) && jkM) {
+              var n = parseInt(jkM[0], 10);
+              var mn = 7 * 60 + (n - 1) * 40 + (n >= 4 ? 15 : 0);
+              r.mulai = r.mulai || Math.floor(mn / 60) + ":" + ("0" + (mn % 60)).slice(-2);
+              r.selesai = r.selesai || Math.floor((mn + 40) / 60) + ":" + ("0" + ((mn + 40) % 60)).slice(-2);
+            }
+            return r;
+          });
+        });
+        return out;
+      }
+
+      var i = 0, lastErr = "tidak diketahui", gagalKosong = "";
       function coba() {
         if (i >= ALAT_AI_MODELS.length) {
           btnAi.disabled = false;
-          statusEl.style.color = "#fda4a4";
-          statusEl.textContent = "Gagal: " + lastErr;
+          if (gagalKosong) {
+            statusEl.style.color = "var(--amber-500)";
+            statusEl.textContent = "AI tidak menemukan baris jadwal. " + gagalKosong +
+              (isPdf ? " Kalau PDF-nya hasil scan/foto, screenshot halamannya lalu kirim sebagai gambar." : " Coba foto yang lebih jelas/perbesar teksnya.");
+          } else {
+            statusEl.style.color = "#fda4a4";
+            statusEl.textContent = "Gagal: " + lastErr;
+          }
           return;
         }
         var model = ALAT_AI_MODELS[i++];
@@ -1502,22 +1559,28 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
             coba();
             return;
           }
-          var text = (r.data && r.data.choices && r.data.choices[0] && r.data.choices[0].message)
-            ? (r.data.choices[0].message.content || "")
-            : "";
-          text = text.replace(/^```(?:json)?/i, "").replace(/```\s*$/, "").trim();
+          var mm = r.data && r.data.choices && r.data.choices[0] && r.data.choices[0].message;
+          var text = "";
+          if (mm) {
+            if (typeof mm.content === "string") text = mm.content;
+            else if (Array.isArray(mm.content)) text = mm.content.map(function (p) { return (p && p.text) || ""; }).join("\n");
+          }
+          text = String(text).replace(/^```(?:json)?/i, "").replace(/```\s*$/, "").trim();
+          var a = text.indexOf("{"), b = text.lastIndexOf("}");
+          if (a === -1 || b <= a) { lastErr = "AI tidak mengembalikan JSON valid."; coba(); return; }
           var obj;
-          try { obj = JSON.parse(text); }
+          try { obj = JSON.parse(text.slice(a, b + 1)); }
           catch (e) { lastErr = "AI tidak mengembalikan JSON valid."; coba(); return; }
-          var parsed = alatNormalisasiAI(obj);
-          btnAi.disabled = false;
+          var rapi = rapikan(obj);
+          var parsed = alatNormalisasiAI(rapi || obj);
           if (parsed.hariAda.length === 0) {
-            statusEl.style.color = "var(--amber-500)";
-            statusEl.textContent = "AI tidak menemukan baris jadwal yang bisa dipakai. " + (parsed.peringatan[0] || "");
+            gagalKosong = (obj && obj.catatan) ? obj.catatan : "Dokumen mungkin kosong/terpotong.";
+            coba();
             return;
           }
+          btnAi.disabled = false;
           statusEl.style.color = "var(--teal-400)";
-          statusEl.textContent = "✅ Berhasil dipetakan" + (obj.catatan ? " — " + obj.catatan : " ") + " Cek pratinjau, lalu Simpan & Import.";
+          statusEl.textContent = "✅ Berhasil dipetakan" + ((rapi && rapi.catatan) ? " — " + rapi.catatan : " ") + " Cek pratinjau, lalu Simpan & Import.";
           onOk(parsed);
         }).catch(function (e) {
           lastErr = (e && e.message) || "jaringan error";
@@ -1528,6 +1591,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     };
     reader.readAsDataURL(file);
   }
+  
   
   function alatRenderPreview(parsed) {
     var wrap = document.getElementById("alat-preview");
