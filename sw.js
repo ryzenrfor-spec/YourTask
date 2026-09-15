@@ -1,5 +1,5 @@
-/* YourTask Service Worker - GitHub Pages Project Site (v18 - encrypted IndexedDB storage) */
-const CACHE_NAME = 'yourtask-cache-v18';
+/* YourTask Service Worker - GitHub Pages Project Site (v20 - time sync, overlap validation, hardened storage) */
+const CACHE_NAME = 'yourtask-cache-v20';
 const BASE = '/YourTask/';
 
 const PRECACHE_URLS = [
@@ -84,6 +84,7 @@ const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu
 
 let dbPromise = null;
 let keyPromise = null;
+let waktuOffsetMs = 0; /* dari aplikasi: kompensasi jam perangkat */
 
 function openStateDB() {
   if (dbPromise) return dbPromise;
@@ -176,7 +177,7 @@ function idbPut(key, value) {
 function getWibNow(tz) {
   const parts = new Intl.DateTimeFormat('id-ID', {
     timeZone: tz || 'Asia/Jakarta', weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false
-  }).formatToParts(new Date());
+  }).formatToParts(new Date(Date.now() + waktuOffsetMs));
   const v = {};
   parts.forEach((p) => { v[p.type] = p.value; });
   return {
@@ -190,6 +191,11 @@ function normalize(v) {
 }
 
 async function checkBackgroundDeadlines() {
+  /* Samakan jam dengan aplikasi: pakai offset server bila masih segar (<7 hari) */
+  const wOff = await idbGet('waktuOffset');
+  if (wOff && typeof wOff.offset === 'number' && Date.now() - (wOff.disinkron || 0) < 7 * 24 * 3600 * 1000) {
+    waktuOffsetMs = wOff.offset;
+  }
   const tasks = (await idbGet('tasks')) || [];
   const schedule = (await idbGet('schedule')) || {};
   const activeDays = (await idbGet('activeDays')) || [1, 2, 3, 4, 5, 6];

@@ -309,9 +309,52 @@
     });
   }
 
+  /* --- SANITASI DATA: rekaman rusak/korup tidak boleh merusak aplikasi --- */
+  function bersihkanJadwal(v) {
+    var bersih = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    if (!v || typeof v !== "object" || Array.isArray(v)) return bersih;
+    for (var d = 0; d <= 6; d++) {
+      var baris = Array.isArray(v[d]) ? v[d] : [];
+      baris.forEach(function (x) {
+        if (!x || typeof x !== "object") return;
+        if (!/^\d{1,2}:\d{2}$/.test(String(x.mulai || ""))) return;
+        if (!/^\d{1,2}:\d{2}$/.test(String(x.selesai || ""))) return;
+        if (!String(x.mapel || "").trim()) return;
+        if (jamKeMenit(x.mulai) >= jamKeMenit(x.selesai)) return;
+        var tipe = (x.tipe === "istirahat" || x.tipe === "upacara") ? x.tipe : "pelajaran";
+        bersih[d].push({
+          jamKe: /^\d+$/.test(String(x.jamKe)) ? String(x.jamKe) : "",
+          mulai: normJamStr(x.mulai),
+          selesai: normJamStr(x.selesai),
+          mapel: String(x.mapel).replace(/\s+/g, " ").trim().slice(0, 120),
+          tipe: tipe
+        });
+      });
+    }
+    return bersih;
+  }
+
+  function bersihkanTugas(v) {
+    if (!Array.isArray(v)) return [];
+    return v.filter(function (t) {
+      return t && typeof t === "object" && typeof t.id === "string" && t.id &&
+             typeof t.mapel === "string" && t.mapel.trim() !== "" &&
+             typeof t.detail === "string";
+    }).map(function (t) {
+      return {
+        id: t.id.slice(0, 64),
+        mapel: t.mapel.replace(/\s+/g, " ").trim().slice(0, 120),
+        detail: t.detail.slice(0, 500),
+        completed: !!t.completed,
+        dibuat: (typeof t.dibuat === "number" && isFinite(t.dibuat)) ? t.dibuat : Date.now(),
+        berulang: (t.berulang === "mingguan" || t.berulang === "hari_ini") ? t.berulang : "tidak"
+      };
+    });
+  }
+
   function muatJadwal() {
     return encGet("schedule").then(function (v) {
-      JADWAL = (v && typeof v === "object" && !Array.isArray(v)) ? v : { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+      JADWAL = bersihkanJadwal(v);
     }).catch(function () {
       JADWAL = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
     });
@@ -328,7 +371,7 @@
   
   function muatTugas() {
     return encGet("tasks").then(function (v) {
-      tugasList = Array.isArray(v) ? v : [];
+      tugasList = bersihkanTugas(v);
     }).catch(function () {
       tugasList = [];
     });
@@ -433,11 +476,49 @@
     reader.readAsText(file);
   }
   
+  /* --- SINKRONISASI WAKTU SERVER (kompensasi jam perangkat yang salah) --- */
+  /* Jika jam internal HP/laptop diubah manual, hitungan KBM & deadline ikut kacau.
+     Solusi: ambil waktu dari time API, hitung offset (waktu server - waktu perangkat)
+     dengan mengompensasi RTT jaringan, lalu pakai offset itu di nowWIB().
+     Offset disimpan terenkripsi, cache 7 hari, dan divalidasi ulang tiap 6 jam.
+     Gagal jaringan = aman: fallback ke jam perangkat. */
+  var waktuOffsetMs = 0; /* serverTime ~= deviceTime + offset */
+  var WAKTU_KEY = "waktuOffset";
+
+  function ambilWaktuServer() {
+    if (location.protocol !== "https:" || !(window.crypto && window.crypto.subtle)) return Promise.resolve();
+    var mulai = Date.now();
+    return fetch("https://worldtimeapi.org/api/timezone/Etc/UTC", { cache: "no-store" })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data || typeof data.unixtime !== "number") return;
+        var rtt = Date.now() - mulai;
+        /* Perkiraan waktu server saat respons TIBA: unixtime + setengah RTT.
+           Hanya dipakai bila selisihnya signifikan (> 90 detik). */
+        var tiba = data.unixtime * 1000 + Math.round(rtt / 2);
+        var offset = tiba - Date.now();
+        if (Math.abs(offset) > 90 * 1000) {
+          waktuOffsetMs = offset;
+          encPut(WAKTU_KEY, { offset: waktuOffsetMs, disinkron: Date.now() });
+          console.info("Waktu disinkronkan ke server (selisih " + Math.round(offset / 1000) + " detik).");
+        }
+      })
+      .catch(function () { /* offline / API down -> pakai jam perangkat */ });
+  }
+
+  function muatOffsetWaktu() {
+    return encGet(WAKTU_KEY).then(function (v) {
+      if (v && typeof v.offset === "number" && (Date.now() - (v.disinkron || 0)) < 7 * 24 * 3600 * 1000) {
+        waktuOffsetMs = v.offset;
+      }
+    }).catch(function () {});
+  }
+
   function nowWIB() {
     var parts = new Intl.DateTimeFormat("id-ID", {
       timeZone: currentTZ, weekday: "long", year: "numeric", month: "2-digit",
       day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-    }).formatToParts(new Date());
+    }).formatToParts(new Date(Date.now() + waktuOffsetMs));
 
     var map = {};
     parts.forEach(function (p) { map[p.type] = p.value; });
@@ -464,6 +545,23 @@
     return parseInt(b[0], 10) * 60 + parseInt(b[1], 10);
   }
   function pad(n) { return n < 10 ? "0" + n : "" + n; }
+
+  function normJamStr(hhmm) {
+    var b = String(hhmm || "0:0").split(":");
+    return pad(parseInt(b[0], 10) || 0) + ":" + pad(parseInt(b[1], 10) || 0);
+  }
+
+  /* Deteksi dua baris jadwal yang rentang waktunya saling bertabrakan (overlap).
+     Dipakai form tambah & edit; baris yang sedang diedit dikecualikan. */
+  function adaTabrakanJadwal(daftar, mulaiBaru, selesaiBaru, abaikanIdx) {
+    var m1 = jamKeMenit(mulaiBaru), m2 = jamKeMenit(selesaiBaru);
+    for (var i = 0; i < daftar.length; i++) {
+      if (i === abaikanIdx) continue;
+      var x = daftar[i];
+      if (m1 < jamKeMenit(x.selesai) && jamKeMenit(x.mulai) < m2) return x;
+    }
+    return null;
+  }
 
   /* Urutan otomatis: baris dgn jamKe diurutkan per nomor jamKe lalu waktu.
      Baris TANPA jamKe (istirahat dll.) disisipkan tepat di antara dua pelajaran
@@ -848,7 +946,7 @@
   }
 
   function bersihkanTugasHarian() {
-    var hariIni = new Date().toDateString();
+    var hariIni = new Date(Date.now() + waktuOffsetMs).toDateString();
     var berubah = false;
     tugasList.forEach(function (t) {
       if (t.berulang === "hari_ini" && !t.completed && new Date(t.dibuat).toDateString() !== hariIni) {
@@ -1002,9 +1100,14 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
   
   async function init() {
     grab();
+    mulaiAlat(); /* tombol Alat di samping + Tambah (el sudah terisi di sini) */
+    /* Peringatan bila konteks tidak aman (HTTP): enkripsi & SW terbatas */
+    var banInsecure = document.getElementById("banner-insecure");
+    if (banInsecure) banInsecure.hidden = (window.isSecureContext !== false);
     await muatProfil();
     await muatJadwal();
     await muatTugas();
+    muatOffsetWaktu().then(ambilWaktuServer); /* kompensasi jam perangkat */
     mirrorStateToIDB();
     terapkanLabelZona();
     
@@ -1127,6 +1230,8 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         var jamKe = el.inputJadwalJamKe ? el.inputJadwalJamKe.value : "";
 
         if(jamKeMenit(mulai) >= jamKeMenit(selesai)) { showToast("Waktu mulai harus lebih awal!"); return; }
+        var bentrok = adaTabrakanJadwal(JADWAL[h] || [], mulai, selesai, null);
+        if (bentrok) { showToast("Bentrok dengan \"" + bentrok.mapel + "\" (" + bentrok.mulai + "\u2013" + bentrok.selesai + "). Pilih jam lain."); return; }
 
         var jkNum = parseInt(jamKe, 10);
         if (tipe === "pelajaran") {
@@ -1214,6 +1319,8 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         var jamKe = el.inputEditJamKe ? el.inputEditJamKe.value : "";
 
         if(jamKeMenit(mulai) >= jamKeMenit(selesai)) { showToast("Waktu mulai harus lebih awal!"); return; }
+        var bentrok = adaTabrakanJadwal(JADWAL[hariDipilih] || [], mulai, selesai, selectedScheduleIndex);
+        if (bentrok) { showToast("Bentrok dengan \"" + bentrok.mapel + "\" (" + bentrok.mulai + "\u2013" + bentrok.selesai + "). Pilih jam lain."); return; }
 
         var jkNum = parseInt(jamKe, 10);
         if (tipe === "pelajaran") {
@@ -1326,6 +1433,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     setInterval(tickJam, 1000);
     setInterval(function () { updateStatusKBM(); if (hariDipilih === nowWIB().dayIndex) renderJadwalHari(); }, 15000);
     setInterval(function () { bersihkanTugasHarian(); renderTugas(); cekNotifikasi(); }, 60000);
+    setInterval(ambilWaktuServer, 6 * 60 * 60 * 1000); /* validasi ulang offset tiap 6 jam */
   }
 
   if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", start); } else { start(); }
@@ -1333,7 +1441,10 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     migrasiLocalStorage()
       .then(function () { return muatHariAktif(); })
       .then(function () { return init(); })
-      .catch(function (e) { console.error("Gagal memuat data tersimpan:", e); });
+      .catch(function (e) {
+        console.error("Gagal memuat data tersimpan:", e);
+        return init();
+      });
   }
   
   /* ====== ALAT JADWAL + HARI SEKOLAH AKTIF + AI PDF ====== */
@@ -2016,17 +2127,17 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     btn.textContent = "Alat";
     btn.onclick = alatBukaModal;
     if (el.btnTambahJadwal && el.btnTambahJadwal.parentNode) {
-      el.btnTambahJadwal.parentNode.insertBefore(btn, el.btnTambahJadwal);
+      /* Taruh Alat di samping tombol + Tambah dalam satu baris aksi */
+      var baris = document.createElement("div");
+      baris.className = "panel-head-actions";
+      el.btnTambahJadwal.parentNode.insertBefore(baris, el.btnTambahJadwal);
+      baris.appendChild(btn);
+      baris.appendChild(el.btnTambahJadwal);
     } else {
       btn.style.cssText = "position:fixed;right:14px;bottom:14px;z-index:40";
       document.body.appendChild(btn);
     }
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", mulaiAlat);
-  } else {
-    mulaiAlat();
-  }
 
 })();
