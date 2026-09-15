@@ -8,6 +8,7 @@ const PRECACHE_URLS = [
   BASE + 'style.css',
   BASE + 'script.js',
   BASE + 'manifest.json',
+  BASE + 'privacy.html',
   BASE + 'icon.png',
   BASE + 'icon-512.png',
   BASE + 'icon-maskable-512.png'
