@@ -1795,7 +1795,13 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
           if (!r.ok) {
             var msg = (r.data && r.data.error && r.data.error.message) || ("HTTP " + r.status);
             if (r.status === 429) msg = "Kuota gratis Gemini habis — coba lagi nanti/besok.";
-            else if (r.status === 400 || r.status === 401 || r.status === 403) msg = "API key tidak valid atau tidak punya akses (periksa key dari Google AI Studio).";
+             else if (r.status === 400 || r.status === 413) {
+              var emsg = String((r.data && r.data.error && r.data.error.message) || "");
+              msg = /size|too large|payload|bytes/i.test(emsg)
+                ? "File terlalu besar (maks ±14 MB). Kompres PDF-nya atau screenshot halamannya."
+                : "Permintaan ditolak Gemini: " + (emsg || "periksa key dari Google AI Studio.");
+            }
+            else if (r.status === 401 || r.status === 403) msg = "API key tidak valid atau tidak punya akses (periksa key dari Google AI Studio).";
             lastErr = msg;
             coba();
             return;
