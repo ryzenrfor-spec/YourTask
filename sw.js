@@ -1,5 +1,5 @@
-/* YourTask Service Worker (v22 - PWA update toast support) */
-const CACHE_NAME = 'yourtask-cache-v22';
+/* YourTask Service Worker (v23 - PWA update toast support) */
+const CACHE_NAME = 'yourtask-cache-v23';
 const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
 const PRECACHE_URLS = [
