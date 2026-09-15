@@ -2,12 +2,7 @@
   "use strict";
 
   /* --- LOCAL CONFIGURATION --- */
-  var STORAGE_KEY = "yourtask_tugas_v1";
-  var SCHEDULE_KEY = "yourtask_jadwal_v1";
-  var USER_KEY = "yourtask_username";
-  var SCHOOL_KEY = "yourtask_school";
   var TZ = "Asia/Jakarta";
-  var TZ_KEY = "yourtask_timezone";
   var TZ_AUTO = "auto";
   function deteksiZona() {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || TZ; } catch (e) { return TZ; }
@@ -113,81 +108,213 @@
     
   }
 
-  /* --- MIRROR KE INDEXEDDB (dibaca oleh Service Worker) --- */
+  /* --- PENYIMPANAN: INDEXEDDB TERENKRIPSI (AES-256-GCM, Web Crypto API) --- */
+  /* Semua data (tugas, jadwal, profil, hari aktif, key AI) disimpan terenkripsi
+     di store "enc" memakai AES-256-GCM (NIST SP 800-38D). Kunci AES-256
+     non-extractable dibuat sekali lalu disimpan sebagai objek CryptoKey di DB
+     terpisah "yourtask-keys-v1" — materi kunci tidak bisa diekspor/dibaca
+     oleh JavaScript apa pun. Browser tanpa Web Crypto (konteks non-HTTPS)
+     jatuh ke mode plain agar aplikasi tetap berjalan. */
   var IDB_NAME = "yourtask-db-v1";
-  var IDB_STORE = "state";
+  var IDB_VERSION = 2;
+  var IDB_STORE = "enc";
+  var IDB_LEGACY_STORE = "state"; /* store mirror lama (plaintext) — dibersihkan saat migrasi */
+  var KEY_DB_NAME = "yourtask-keys-v1";
+  var KEY_DB_STORE = "keys";
+  var KEY_ID = "app";
+  var dbPromise = null;
+  var keyPromise = null;
 
   function openStateDB() {
-    return new Promise(function (resolve, reject) {
-      var req = indexedDB.open(IDB_NAME, 1);
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise(function (resolve, reject) {
+      var req = indexedDB.open(IDB_NAME, IDB_VERSION);
       req.onupgradeneeded = function () {
-        req.result.createObjectStore(IDB_STORE, { keyPath: "key" });
+        var db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE, { keyPath: "key" });
+        }
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    }).catch(function (e) { dbPromise = null; throw e; });
+    return dbPromise;
+  }
+
+  function openKeyDB() {
+    return new Promise(function (resolve, reject) {
+      var req = indexedDB.open(KEY_DB_NAME, 1);
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(KEY_DB_STORE)) {
+          db.createObjectStore(KEY_DB_STORE, { keyPath: "key" });
+        }
       };
       req.onsuccess = function () { resolve(req.result); };
       req.onerror = function () { reject(req.error); };
     });
   }
 
-  function idbPut(key, value) {
+  function getCryptoKey() {
+    if (keyPromise) return keyPromise;
+    keyPromise = openKeyDB().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(KEY_DB_STORE, "readonly");
+        var g = tx.objectStore(KEY_DB_STORE).get(KEY_ID);
+        tx.oncomplete = function () { db.close(); resolve(g.result ? g.result.value : null); };
+        tx.onerror = function () { db.close(); reject(tx.error); };
+      });
+    }).then(function (ada) {
+      if (ada) return ada;
+      if (!(window.crypto && window.crypto.subtle)) return null; /* fallback: tanpa enkripsi */
+      return window.crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"])
+        .then(function (kunci) {
+          return openKeyDB().then(function (db) {
+            return new Promise(function (resolve, reject) {
+              var tx = db.transaction(KEY_DB_STORE, "readwrite");
+              tx.objectStore(KEY_DB_STORE).put({ key: KEY_ID, value: kunci });
+              tx.oncomplete = function () { db.close(); resolve(kunci); };
+              tx.onerror = function () { db.close(); reject(tx.error); };
+            });
+          });
+        });
+    }).catch(function (e) { keyPromise = null; throw e; });
+    return keyPromise;
+  }
+
+  function encPut(key, value) {
+    var json = JSON.stringify(value === undefined ? null : value);
+    return Promise.all([getCryptoKey(), openStateDB()]).then(function (r) {
+      var ck = r[0], db = r[1];
+      var tulis = function (rec) {
+        return new Promise(function (resolve, reject) {
+          var tx = db.transaction(IDB_STORE, "readwrite");
+          tx.objectStore(IDB_STORE).put(rec);
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror = function () { reject(tx.error); };
+        });
+      };
+      if (!ck) return tulis({ key: key, plain: true, json: json });
+      var iv = window.crypto.getRandomValues(new Uint8Array(12));
+      return window.crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, ck, new TextEncoder().encode(json))
+        .then(function (buf) { return tulis({ key: key, iv: iv.buffer, data: buf }); });
+    }).catch(function (e) { console.warn("Gagal menyimpan data:", e); });
+  }
+
+  function encGet(key) {
+    return Promise.all([getCryptoKey(), openStateDB()]).then(function (r) {
+      var ck = r[0], db = r[1];
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(IDB_STORE, "readonly");
+        var g = tx.objectStore(IDB_STORE).get(key);
+        tx.oncomplete = function () { resolve(g.result || null); };
+        tx.onerror = function () { reject(tx.error); };
+      }).then(function (rec) {
+        if (!rec) return null;
+        if (rec.plain || !ck) return JSON.parse(rec.json);
+        return window.crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(rec.iv) }, ck, rec.data)
+          .then(function (buf) { return JSON.parse(new TextDecoder().decode(buf)); });
+      });
+    }).catch(function (e) { console.warn("Gagal membaca data:", e); return null; });
+  }
+
+  function encDel(key) {
     return openStateDB().then(function (db) {
       return new Promise(function (resolve, reject) {
         var tx = db.transaction(IDB_STORE, "readwrite");
-        tx.objectStore(IDB_STORE).put({ key: key, value: value });
-        tx.oncomplete = function () { db.close(); resolve(); };
-        tx.onerror = function () { db.close(); reject(tx.error); };
+        tx.objectStore(IDB_STORE).delete(key);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
       });
-    }).catch(function (e) { console.warn("Gagal mirror ke IndexedDB:", e); });
+    }).catch(function (e) { console.warn("Gagal menghapus data:", e); });
   }
 
   function mirrorStateToIDB() {
-    idbPut("tasks", tugasList);
-    idbPut("schedule", JADWAL);
-        idbPut("timezone", currentTZ);
-    
+    encPut("tasks", tugasList);
+    encPut("schedule", JADWAL);
+    encPut("timezone", currentTZ);
+  }
+
+  /* --- MIGRASI: pindahkan data lama dari localStorage ke IndexedDB terenkripsi --- */
+  function migrasiLocalStorage() {
+    var pasangan = [
+      ["tasks", "yourtask_tugas_v1"],
+      ["schedule", "yourtask_jadwal_v1"],
+      ["username", "yourtask_username"],
+      ["school", "yourtask_school"],
+      ["timezone", "yourtask_timezone"],
+      ["activeDays", "yourtask_hari_aktif"],
+      ["backupNama", "yourtask_backup_nama"],
+      ["geminiKey", "yourtask_gemini_key"]
+    ];
+    var rantai = Promise.resolve();
+    pasangan.forEach(function (p) {
+      rantai = rantai.then(function () {
+        var raw = null;
+        try { raw = localStorage.getItem(p[1]); } catch (e) {}
+        if (raw === null || raw === undefined) return null;
+        var nilai = raw;
+        if (p[0] === "tasks" || p[0] === "schedule" || p[0] === "activeDays") {
+          try { nilai = JSON.parse(raw); } catch (e) { nilai = null; }
+        }
+        return encGet(p[0]).then(function (sudahAda) {
+          var kerja = ((sudahAda === null || sudahAda === undefined) && nilai !== null) ? encPut(p[0], nilai) : Promise.resolve();
+          return kerja.then(function () {
+            try { localStorage.removeItem(p[1]); } catch (e) {}
+          });
+        });
+      });
+    });
+    return rantai.then(hapusStoreLama);
+  }
+
+  /* Hapus mirror plaintext lama di store "state" agar tidak ada salinan tak terenkripsi */
+  function hapusStoreLama() {
+    return openStateDB().then(function (db) {
+      if (!db.objectStoreNames.contains(IDB_LEGACY_STORE)) return;
+      return new Promise(function (resolve) {
+        var tx = db.transaction(IDB_LEGACY_STORE, "readwrite");
+        tx.objectStore(IDB_LEGACY_STORE).clear();
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { resolve(); };
+        tx.onabort = function () { resolve(); };
+      });
+    }).catch(function () {});
   }
 
   /* --- LOAD & SAVE DATA --- */
   function muatProfil() {
-    try {
-      var savedUser = localStorage.getItem(USER_KEY);
-      var savedSchool = localStorage.getItem(SCHOOL_KEY);
+    return Promise.all([encGet("username"), encGet("school"), encGet("timezone")]).then(function (vals) {
+      var savedUser = vals[0], savedSchool = vals[1], savedTZ = vals[2];
 
-      if (savedUser !== null && savedUser.trim() !== "") {
+      if (typeof savedUser === "string" && savedUser.trim() !== "") {
         currentUsername = savedUser;
       } else {
         currentUsername = "Pengguna Baru";
-        localStorage.setItem(USER_KEY, currentUsername);
+        encPut("username", currentUsername);
       }
       if (el.displayUser) el.displayUser.textContent = currentUsername;
 
-      if (savedSchool !== null && savedSchool.trim() !== "") {
+      if (typeof savedSchool === "string" && savedSchool.trim() !== "") {
         currentSchool = savedSchool;
       } else {
         currentSchool = "Asal Sekolah";
-        localStorage.setItem(SCHOOL_KEY, currentSchool);
+        encPut("school", currentSchool);
       }
       if (el.displaySekolah) el.displaySekolah.textContent = currentSchool;
-            var savedTZ = null;
-      try { savedTZ = localStorage.getItem(TZ_KEY); } catch (e) {}
-      currentTZ = (savedTZ && savedTZ !== TZ_AUTO && savedTZ !== "") ? savedTZ : deteksiZona();
 
-    } catch (e) {
+      currentTZ = (typeof savedTZ === "string" && savedTZ && savedTZ !== TZ_AUTO && savedTZ !== "") ? savedTZ : deteksiZona();
+    }).catch(function (e) {
       console.error("Gagal memuat profil", e);
-    }
+    });
   }
 
   function muatJadwal() {
-    try {
-      var raw = localStorage.getItem(SCHEDULE_KEY);
-      if (raw) {
-        JADWAL = JSON.parse(raw);
-      } else {
-        JADWAL = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-      }
-    } catch (e) {
+    return encGet("schedule").then(function (v) {
+      JADWAL = (v && typeof v === "object" && !Array.isArray(v)) ? v : { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+    }).catch(function () {
       JADWAL = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-      localStorage.removeItem(SCHEDULE_KEY);
-    }
+    });
   }
 
   function simpanJadwal() {
@@ -195,25 +322,20 @@
       for (var i = 0; i <= 6; i++) {
         if (JADWAL[i]) JADWAL[i] = urutkanJadwal(JADWAL[i]);
       }
-      localStorage.setItem(SCHEDULE_KEY, JSON.stringify(JADWAL));
       mirrorStateToIDB();
     } catch (e) {}
   }
   
   function muatTugas() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      tugasList = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(tugasList)) tugasList = [];
-    } catch (e) {
+    return encGet("tasks").then(function (v) {
+      tugasList = Array.isArray(v) ? v : [];
+    }).catch(function () {
       tugasList = [];
-      localStorage.removeItem(STORAGE_KEY);
-    }
+    });
   }
 
   function simpanTugas() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tugasList));
       mirrorStateToIDB();
     } catch (e) {}
   }
@@ -265,7 +387,7 @@
     
     };
      var namaCustom = el.inputBackupNama ? el.inputBackupNama.value.trim() : "";
-    try { localStorage.setItem("yourtask_backup_nama", namaCustom); } catch (err) {}
+    encPut("backupNama", namaCustom);
     var d = new Date();
     var pad2 = function (x) { return (x < 10 ? "0" : "") + x; };
     var stamp = d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + "_" + pad2(d.getHours()) + "-" + pad2(d.getMinutes());
@@ -288,19 +410,22 @@
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Format backup tidak valid");
         if (parsed.tugas && !Array.isArray(parsed.tugas)) throw new Error("Data tugas tidak valid");
         if (parsed.jadwal && (typeof parsed.jadwal !== "object" || Array.isArray(parsed.jadwal))) throw new Error("Data jadwal tidak valid");
-        if (parsed.tugas) localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed.tugas));
-        if (parsed.jadwal) localStorage.setItem(SCHEDULE_KEY, JSON.stringify(parsed.jadwal));
-        if (parsed.username) localStorage.setItem(USER_KEY, parsed.username);
-        if (parsed.sekolah) localStorage.setItem(SCHOOL_KEY, parsed.sekolah);
-        if (parsed.hariAktif) localStorage.setItem("yourtask_hari_aktif", JSON.stringify(parsed.hariAktif));
+        var pekerjaan = [];
+        if (parsed.tugas) pekerjaan.push(encPut("tasks", parsed.tugas));
+        if (parsed.jadwal) pekerjaan.push(encPut("schedule", parsed.jadwal));
+        if (parsed.username) pekerjaan.push(encPut("username", parsed.username));
+        if (parsed.sekolah) pekerjaan.push(encPut("school", parsed.sekolah));
+        if (parsed.hariAktif) pekerjaan.push(encPut("activeDays", parsed.hariAktif));
         if (parsed.timezone && /^[A-Za-z_]+\/[A-Za-z_+\-0-9]+$/.test(parsed.timezone)) {
           currentTZ = parsed.timezone;
-          try { localStorage.setItem(TZ_KEY, currentTZ); } catch (e) {}
+          pekerjaan.push(encPut("timezone", currentTZ));
                 }
         
 
         showToast("Data berhasil di-restore! Memuat ulang...");
-        setTimeout(function() { location.reload(); }, 1200);
+        Promise.all(pekerjaan).catch(function () {}).then(function () {
+          setTimeout(function() { location.reload(); }, 1200);
+        });
       } catch (err) {
         showToast("Waduh, file JSON-nya tidak valid atau rusak.");
       }
@@ -875,11 +1000,11 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     }
   }
   
-  function init() {
+  async function init() {
     grab();
-    muatProfil();
-    muatJadwal();
-    muatTugas();
+    await muatProfil();
+    await muatJadwal();
+    await muatTugas();
     mirrorStateToIDB();
     terapkanLabelZona();
     
@@ -909,8 +1034,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       registerPeriodicSync();
     }
     if (el.inputBackupNama) {
-      var savedNama = null;
-      try { savedNama = localStorage.getItem("yourtask_backup_nama"); } catch (err) {}
+      var savedNama = await encGet("backupNama");
       if (savedNama) el.inputBackupNama.value = savedNama;
     }
 
@@ -946,13 +1070,12 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         e.preventDefault();
         var valUser = el.inputUsername ? el.inputUsername.value.trim() : "";
         var valSchool = el.inputSekolah ? el.inputSekolah.value.trim() : "";
-        if(valUser) { currentUsername = valUser; localStorage.setItem(USER_KEY, currentUsername); if (el.displayUser) el.displayUser.textContent = currentUsername; }
-        if(valSchool) { currentSchool = valSchool; localStorage.setItem(SCHOOL_KEY, currentSchool); if (el.displaySekolah) el.displaySekolah.textContent = currentSchool; }
+        if(valUser) { currentUsername = valUser; encPut("username", currentUsername); if (el.displayUser) el.displayUser.textContent = currentUsername; }
+        if(valSchool) { currentSchool = valSchool; encPut("school", currentSchool); if (el.displaySekolah) el.displaySekolah.textContent = currentSchool; }
         var selTZ = document.getElementById("input-timezone");
         if (selTZ) {
           currentTZ = (selTZ.value === TZ_AUTO) ? deteksiZona() : selTZ.value;
-          try { localStorage.setItem(TZ_KEY, selTZ.value); } catch (e) {}
-          if (typeof idbPut === "function") idbPut("timezone", currentTZ);
+          encPut("timezone", currentTZ);
           terapkanLabelZona();
           tickJam(); updateStatusKBM(); renderJadwalHari();
         }
@@ -1205,31 +1328,30 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     setInterval(function () { bersihkanTugasHarian(); renderTugas(); cekNotifikasi(); }, 60000);
   }
 
-  muatHariAktif();
-  if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", init); } else { init(); }
+  if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", start); } else { start(); }
+  function start() {
+    migrasiLocalStorage()
+      .then(function () { return muatHariAktif(); })
+      .then(function () { return init(); })
+      .catch(function (e) { console.error("Gagal memuat data tersimpan:", e); });
+  }
   
   /* ====== ALAT JADWAL + HARI SEKOLAH AKTIF + AI PDF ====== */
-  var HARI_KEY = "yourtask_hari_aktif";
 
   function muatHariAktif() {
-    try {
-      var raw = localStorage.getItem(HARI_KEY);
-      if (raw) {
-        var arr = JSON.parse(raw);
-        if (Array.isArray(arr)) {
-          var bersih = arr.filter(function (d) { return d >= 0 && d <= 6; })
-                          .sort(function (a, b) { return a - b; });
-          if (bersih.length > 0) hariAktif = bersih;
-        }
+    return encGet("activeDays").then(function (arr) {
+      if (Array.isArray(arr)) {
+        var bersih = arr.filter(function (d) { return d >= 0 && d <= 6; })
+                        .sort(function (a, b) { return a - b; });
+        if (bersih.length > 0) hariAktif = bersih;
       }
-    } catch (e) {}
-    if (!hariAktif || hariAktif.length === 0) hariAktif = [1, 2, 3, 4, 5, 6];
-    if (typeof idbPut === "function") idbPut("activeDays", hariAktif);
+    }).catch(function () {}).then(function () {
+      if (!hariAktif || hariAktif.length === 0) hariAktif = [1, 2, 3, 4, 5, 6];
+    });
   }
 
   function simpanHariAktif() {
-    try { localStorage.setItem(HARI_KEY, JSON.stringify(hariAktif)); } catch (e) {}
-    if (typeof idbPut === "function") idbPut("activeDays", hariAktif);
+    encPut("activeDays", hariAktif);
   }
 
   function refreshSemua() {
@@ -1415,14 +1537,14 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     return { hasil: hasil, hariAda: hariAda, peringatan: peringatan };
   }
 
-  var ALAT_AI_KEY_STORE = "yourtask_gemini_key";
-  var ALAT_AI_MODELS = ["google/gemma-4-26b-a4b-it:free", "google/gemma-4-31b-it:free", "inclusionai/ling-3.0-flash-vl:free", "openrouter/free"];
+  /* Gemini free tier via Google AI Studio (aistudio.google.com/apikey) */
+  var ALAT_AI_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
   var alatParsedTerakhir = null;
 
   function alatScanAI(file, instruksi, apiKey, statusEl, btnAi, onOk) {
     if (!apiKey) {
       statusEl.style.color = "var(--amber-500)";
-      statusEl.textContent = "Isi API key dulu (gratis di openrouter.ai/settings/keys).";
+      statusEl.textContent = "Isi API key dulu (gratis di aistudio.google.com/apikey).";
       return;
     }
     if (!file) {
@@ -1459,17 +1581,19 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         "8. Teks hasil ekstrak PDF sering acak (kolom menumpuk, urutan kacau). TETAP USAHA memetakan baris-barisnya ke format di atas.\n" +
         "9. HANYA jika benar-benar tidak ada jadwal di dokumen, balas {\"jadwal\":{},\"catatan\":\"alasan singkat\"}.\n";
 
-      var contentParts = [{ type: "text", text: prompt }];
-      if (isPdf) {
-        contentParts.push({ type: "file", file: { url: dataUrl } });
-      } else {
-        contentParts.push({ type: "image_url", image_url: { url: dataUrl } });
-      }
+      /* Format native Gemini: inline_data menerima gambar DAN PDF (base64). */
+      var dataB64 = String(dataUrl).slice(String(dataUrl).indexOf(",") + 1);
+      var mime = isPdf ? "application/pdf" : (file.type || "image/png");
       var body = {
-        messages: [{ role: "user", content: contentParts }],
-        temperature: 0.1
+        contents: [{
+          role: "user",
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: mime, data: dataB64 } }
+          ]
+        }],
+        generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
       };
-      if (isPdf) body.plugins = [{ id: "file-parser", pdf: { engine: "pdf-text" } }];
 
       /* --- perapian jawaban AI sebelum dinormalisasi --- */
       function rapikan(obj) {
@@ -1536,15 +1660,12 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
           return;
         }
         var model = ALAT_AI_MODELS[i++];
-        body.model = model;
         statusEl.textContent = "AI sedang memetakan dokumen (" + model + ")...";
-        fetch("https://openrouter.ai/api/v1/chat/completions", {
+        fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent", {
           method: "POST",
           headers: {
-            "Authorization": "Bearer " + apiKey,
             "Content-Type": "application/json",
-            "HTTP-Referer": location.origin,
-            "X-Title": "YourTask"
+            "x-goog-api-key": apiKey
           },
           body: JSON.stringify(body)
         }).then(function (res) {
@@ -1552,19 +1673,14 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         }).then(function (r) {
           if (!r.ok) {
             var msg = (r.data && r.data.error && r.data.error.message) || ("HTTP " + r.status);
-            if (r.status === 429) msg = "Limit model gratis habis — coba lagi nanti/besok.";
-            else if (r.status === 401) msg = "API key tidak valid.";
-            else if (r.status === 402 || /credit/i.test(msg)) msg = "Model ini butuh kredit — pakai model :free.";
+            if (r.status === 429) msg = "Kuota gratis Gemini habis — coba lagi nanti/besok.";
+            else if (r.status === 400 || r.status === 401 || r.status === 403) msg = "API key tidak valid atau tidak punya akses (periksa key dari Google AI Studio).";
             lastErr = msg;
             coba();
             return;
           }
-          var mm = r.data && r.data.choices && r.data.choices[0] && r.data.choices[0].message;
-          var text = "";
-          if (mm) {
-            if (typeof mm.content === "string") text = mm.content;
-            else if (Array.isArray(mm.content)) text = mm.content.map(function (p) { return (p && p.text) || ""; }).join("\n");
-          }
+          var cands = r.data && r.data.candidates, parts = (cands && cands[0] && cands[0].content && cands[0].content.parts) || [];
+          var text = parts.map(function (p) { return (p && typeof p.text === "string") ? p.text : ""; }).join("\n");
           text = String(text).replace(/^```(?:json)?/i, "").replace(/```\s*$/, "").trim();
           var a = text.indexOf("{"), b = text.lastIndexOf("}");
           if (a === -1 || b <= a) { lastErr = "AI tidak mengembalikan JSON valid."; coba(); return; }
@@ -1723,10 +1839,14 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     fAi.appendChild(lblAi); fAi.appendChild(aiRow);
     var keyAi = document.createElement("input");
     keyAi.type = "password";
-    keyAi.placeholder = "OpenRouter API key (disimpan lokal)";
+    keyAi.placeholder = "Gemini API key (disimpan lokal)";
     var keyTersimpan = "";
-    try { keyTersimpan = localStorage.getItem(ALAT_AI_KEY_STORE) || ""; } catch (e) {}
-    keyAi.value = keyTersimpan;
+    keyAi.value = "";
+    encGet("geminiKey").then(function (v) {
+      keyTersimpan = v || "";
+      if (document.activeElement !== keyAi) keyAi.value = keyTersimpan;
+      alatStatusKey();
+    });
     keyAi.style.cssText = "width:100%;box-sizing:border-box;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--line);background-color:var(--navy-700);color:var(--text);font-family:inherit;font-size:12.5px;margin-top:8px";
     fAi.appendChild(keyAi);
 
@@ -1754,7 +1874,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         aiStatus.textContent = "🔑 Key tersimpan: •••• " + keyTersimpan.slice(-4);
         aiStatus.style.color = "var(--teal-400)";
       } else {
-        aiStatus.textContent = "Key gratis: openrouter.ai/settings/keys → Create Key. PDF & gambar, model :free (200 req/hari).";
+        aiStatus.textContent = "Key gratis: aistudio.google.com/apikey → Create API key. Model Gemini 2.5 Flash (free tier).";
         aiStatus.style.color = "var(--text-muted)";
       }
     }
@@ -1765,13 +1885,13 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       var kunci = keyAi.value.trim();
       if (kunci) {
         keyTersimpan = kunci;
-        try { localStorage.setItem(ALAT_AI_KEY_STORE, kunci); } catch (e) {}
+        encPut("geminiKey", kunci);
         alatStatusKey();
         showToast("API key disimpan.");
       } else if (keyTersimpan) {
         if (!confirm("Kolom key kosong. Hapus API key yang tersimpan?")) return;
         keyTersimpan = "";
-        try { localStorage.removeItem(ALAT_AI_KEY_STORE); } catch (e) {}
+        encDel("geminiKey");
         keyAi.value = "";
         alatStatusKey();
         showToast("API key terakhir dihapus — masukkan key baru untuk pakai AI.");

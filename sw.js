@@ -1,5 +1,5 @@
-/* YourTask Service Worker - GitHub Pages Project Site (v16 - change AI API key) */
-const CACHE_NAME = 'yourtask-cache-v16';
+/* YourTask Service Worker - GitHub Pages Project Site (v18 - encrypted IndexedDB storage) */
+const CACHE_NAME = 'yourtask-cache-v18';
 const BASE = '/YourTask/';
 
 const PRECACHE_URLS = [
@@ -70,37 +70,107 @@ self.addEventListener('fetch', (event) => {
 });
 
 /* ==================== BACKGROUND DEADLINE CHECK ==================== */
+/* Membaca state yang sama dengan aplikasi: store "enc" di yourtask-db-v1 (v2).
+   Rekaman terenkripsi AES-256-GCM didekripsi memakai kunci non-extractable
+   dari yourtask-keys-v1 (dibuat oleh aplikasi). Rekaman { plain: true }
+   dibaca apa adanya (dipakai untuk penanda notifikasi). */
 const DB_NAME = 'yourtask-db-v1';
-const DB_STORE = 'state';
+const DB_VERSION = 2;
+const DB_STORE = 'enc';
+const DB_LEGACY_STORE = 'state';
+const KEY_DB_NAME = 'yourtask-keys-v1';
+const KEY_DB_STORE = 'keys';
 const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
+let dbPromise = null;
+let keyPromise = null;
+
 function openStateDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
-      req.result.createObjectStore(DB_STORE, { keyPath: 'key' });
+      const db = req.result;
+      if (!db.objectStoreNames.contains(DB_STORE)) {
+        db.createObjectStore(DB_STORE, { keyPath: 'key' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  }).catch((e) => { dbPromise = null; throw e; });
+  return dbPromise;
+}
+
+function openKeyDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(KEY_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(KEY_DB_STORE)) {
+        db.createObjectStore(KEY_DB_STORE, { keyPath: 'key' });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
 
-function idbGet(key) {
-  return openStateDB().then((db) => new Promise((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, 'readonly');
-    const req = tx.objectStore(DB_STORE).get(key);
-    tx.oncomplete = () => { db.close(); resolve(req.result ? req.result.value : null); };
+function getCryptoKey() {
+  if (keyPromise) return keyPromise;
+  keyPromise = openKeyDB().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(KEY_DB_STORE, 'readonly');
+    const g = tx.objectStore(KEY_DB_STORE).get('app');
+    tx.oncomplete = () => { db.close(); resolve(g.result ? g.result.value : null); };
     tx.onerror = () => { db.close(); reject(tx.error); };
+  })).catch((e) => { keyPromise = null; throw e; });
+  return keyPromise;
+}
+
+function parseRecord(rec, ck) {
+  if (!rec) return null;
+  if (rec.plain || !ck) {
+    try { return rec.plain ? JSON.parse(rec.json) : (rec.value !== undefined ? rec.value : null); }
+    catch (e) { return null; }
+  }
+  return crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(rec.iv) }, ck, rec.data)
+    .then((buf) => JSON.parse(new TextDecoder().decode(buf)))
+    .catch(() => null);
+}
+
+function idbGet(key) {
+  return Promise.all([openStateDB(), getCryptoKey()]).then(([db, ck]) => new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, 'readonly');
+    const g = tx.objectStore(DB_STORE).get(key);
+    tx.oncomplete = () => { db.close(); resolve(g.result || null); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  }).then((rec) => {
+    if (rec) return parseRecord(rec, ck);
+    /* Fallback: mirror plaintext lama (versi sebelum enkripsi) */
+    return openStateDB().then((db2) => {
+      if (!db2.objectStoreNames.contains(DB_LEGACY_STORE)) return null;
+      return new Promise((resolve) => {
+        const tx = db2.transaction(DB_LEGACY_STORE, 'readonly');
+        const g = tx.objectStore(DB_LEGACY_STORE).get(key);
+        tx.oncomplete = () => { db2.close(); resolve(g.result ? g.result.value : null); };
+        tx.onerror = () => { db2.close(); resolve(null); };
+      });
+    });
   })).catch(() => null);
 }
 
 function idbPut(key, value) {
-  return openStateDB().then((db) => new Promise((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, 'readwrite');
-    tx.objectStore(DB_STORE).put({ key: key, value: value });
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-  })).catch(() => {});
+  return Promise.all([openStateDB(), getCryptoKey()]).then(([db, ck]) => {
+    const tulis = (rec) => new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).put(rec);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+    if (!ck) return tulis({ key: key, plain: true, json: JSON.stringify(value) });
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    return crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, ck, new TextEncoder().encode(JSON.stringify(value)))
+      .then((buf) => tulis({ key: key, iv: iv.buffer, data: buf }));
+  }).catch(() => {});
 }
 
 function getWibNow(tz) {
