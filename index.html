@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f172a" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://generativelanguage.googleapis.com https://worldtimeapi.org; base-uri 'self'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
     <title>YourTask — Aplikasi Jadwal & Tugas</title>
     <meta
       name="description"
@@ -20,6 +21,9 @@
     <link rel="shortcut icon" type="image/png" href="icon.png" />
     <link rel="apple-touch-icon" href="icon.png" />
     <link rel="manifest" href="manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="YourTask" />
     
   </head>
   <body>
@@ -27,7 +31,7 @@
       <!-- ============ HEADER ============ -->
       <header class="app-header">
         <div class="brand">
-          <img src="icon.png" alt="Logo" class="brand-mark" style="object-fit: cover; border-radius: 8px;" onerror="this.style.display='none'" />
+          <img src="icon.png" alt="Logo" class="brand-mark" style="object-fit: cover; border-radius: 8px;" />
           <div class="brand-text">
             <div style="display: flex; align-items: center; gap: 6px;">
               <h1 id="display-username">Memuat...</h1>
@@ -122,7 +126,7 @@
 
       <footer class="app-footer">
         <p>LiliTask &middot; Custom Edition</p>
-        <p class="footer-sub">Data tersimpan terenkripsi (AES-256-GCM) di IndexedDB browser.</p>
+        <p class="footer-sub">Data tersimpan terenkripsi (AES-256-GCM) di IndexedDB browser. · <a href="privacy.html" style="color:inherit;">Kebijakan Privasi</a></p>
       </footer>
     </div>
 

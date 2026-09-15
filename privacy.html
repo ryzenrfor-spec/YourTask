@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#0f172a" />
+    <title>Kebijakan Privasi — YourTask</title>
+    <link rel="icon" type="image/png" href="icon.png" />
+    <style>
+      :root { color-scheme: light dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background: #f1f5f9;
+        color: #0f172a;
+        line-height: 1.65;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }
+      .card {
+        background: #fff;
+        border-radius: 16px;
+        padding: 32px 28px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+      }
+      h1 { font-size: 1.6rem; margin: 0 0 4px; }
+      h2 { font-size: 1.05rem; margin: 28px 0 8px; }
+      p, li { font-size: 0.95rem; color: #334155; }
+      ul { padding-left: 20px; }
+      li { margin: 6px 0; }
+      .meta { color: #64748b; font-size: 0.85rem; margin-bottom: 24px; }
+      .back {
+        display: inline-block; margin-bottom: 20px; font-size: 0.9rem;
+        color: #0f172a; text-decoration: none; font-weight: 600;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #0f172a; color: #e2e8f0; }
+        .card { background: #1e293b; box-shadow: none; }
+        h1, .back { color: #f1f5f9; }
+        p, li { color: #cbd5e1; }
+        .meta { color: #94a3b8; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <a class="back" href="index.html">← Kembali ke YourTask</a>
+      <div class="card">
+        <h1>Kebijakan Privasi YourTask</h1>
+        <p class="meta">Terakhir diperbarui: 15 September 2026</p>
+
+        <h2>1. Ringkasan</h2>
+        <p>
+          YourTask adalah aplikasi <strong>local-first</strong>: seluruh data Anda (profil, jadwal
+          pelajaran, tugas, dan pengaturan) disimpan <strong>hanya di perangkat Anda</strong>, di dalam
+          browser, terenkripsi dengan <strong>AES-256-GCM</strong> pada IndexedDB. Kami tidak memiliki
+          server, tidak membuat akun, dan tidak mengumpulkan data pribadi apa pun.
+        </p>
+
+        <h2>2. Data yang disimpan di perangkat Anda</h2>
+        <ul>
+          <li>Nama dan asal sekolah (untuk tampilan sapaan)</li>
+          <li>Jadwal pelajaran dan daftar tugas</li>
+          <li>Pengaturan: zona waktu, hari aktif, offset sinkronisasi waktu</li>
+          <li>Kunci enkripsi AES-256 (non-extractable) — tidak dapat diekspor oleh JavaScript</li>
+        </ul>
+        <p>
+          Data ini tidak pernah dikirim ke kami karena kami tidak mengoperasikan server. Data hilang
+          hanya jika Anda menghapus data situs di browser.
+        </p>
+
+        <h2>3. Layanan pihak ketiga yang dihubungi</h2>
+        <ul>
+          <li>
+            <strong>Google Gemini API</strong> (<code>generativelanguage.googleapis.com</code>) — hanya
+            saat Anda sengaja menggunakan fitur <em>Pindai AI</em>. Gambar/PDF jadwal yang Anda pilih
+            dikirim langsung dari perangkat Anda ke Google untuk diproses menjadi teks jadwal. Google
+            memprosesnya sesuai
+            <a href="https://policies.google.com/privacy">Kebijakan Privasi Google</a>. App
+            <strong>tidak</strong> mengirim data ini secara otomatis. Jika Anda memakai kunci API
+            milik sendiri, kunci itu tersimpan terenkripsi di perangkat Anda dan tidak dikirim ke
+            mana pun selain Google.
+          </li>
+          <li>
+            <strong>WorldTimeAPI</strong> (<code>worldtimeapi.org</code>) — untuk sinkronisasi jam
+            (memastikan hitungan KBM dan alarm deadline akurat meski jam perangkat salah). Yang
+            dikirim hanyalah permintaan waktu standar; tidak ada data Anda.
+          </li>
+          <li>
+            <strong>Google Fonts</strong> — dimuat untuk tampilan aplikasi.
+          </li>
+        </ul>
+
+        <h2>4. Notifikasi</h2>
+        <p>
+          Notifikasi deadline bersifat lokal: dibuat langsung di perangkat oleh service worker dan
+          hanya muncul setelah Anda memberi izin. Tidak ada push dari server eksternal.
+        </p>
+
+        <h2>5. Anak-anak</h2>
+        <p>
+          YourTask tidak sengaja ditujukan untuk anak di bawah 13 tahun dan tidak mengumpulkan data
+          apa pun dari siapa pun, termasuk anak-anak. Jika Anda orang tua/wali dan memiliki
+          pertanyaan, hubungi kontak di bawah.
+        </p>
+
+        <h2>6. Perubahan kebijakan</h2>
+        <p>
+          Jika kebijakan ini berubah (misalnya saat fitur sinkronisasi cloud ditambahkan), tanggal
+          pembaruan di atas akan diubah dan perubahan akan diumumkan di dalam aplikasi.
+        </p>
+
+        <h2>7. Kontak</h2>
+        <p>
+          Pertanyaan tentang kebijakan ini dapat dikirim ke:
+          <strong id="kontak-email">[alamat email pemilik aplikasi]</strong>
+        </p>
+        <p class="meta" style="margin-top: 28px;">
+          Catatan developer: isi alamat email pada bagian 7 sebelum mengunggah ke Play Store, dan
+          gunakan URL halaman ini pada isian “Privacy Policy URL” di Play Console.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

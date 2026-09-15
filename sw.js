@@ -1,6 +1,6 @@
-/* YourTask Service Worker - GitHub Pages Project Site (v20 - time sync, overlap validation, hardened storage) */
-const CACHE_NAME = 'yourtask-cache-v20';
-const BASE = '/YourTask/';
+/* YourTask Service Worker (v21 - store-ready: scope-relative paths, valid PNG icons, host-agnostic) */
+const CACHE_NAME = 'yourtask-cache-v21';
+const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
 const PRECACHE_URLS = [
   BASE,
@@ -8,7 +8,9 @@ const PRECACHE_URLS = [
   BASE + 'style.css',
   BASE + 'script.js',
   BASE + 'manifest.json',
-  BASE + 'icon.png'
+  BASE + 'icon.png',
+  BASE + 'icon-512.png',
+  BASE + 'icon-maskable-512.png'
 ];
 
 self.addEventListener('install', (event) => {

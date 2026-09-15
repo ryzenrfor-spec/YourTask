@@ -1,43 +1,35 @@
 {
-  "name": "YourTask",
+  "name": "YourTask — Jadwal & Tugas Sekolah",
   "short_name": "YourTask",
-  "description": "Meet to YourTask, a LiliTask's new personal settings",
-  "id": "/YourTask/",
-  "start_url": "/YourTask/?source=pwa",
-  "scope": "/YourTask/",
+  "description": "Aplikasi jadwal pelajaran dan pencatat tugas dengan deteksi KBM real-time WIB, alarm deadline otomatis, dan data tersimpan terenkripsi di perangkat.",
+  "lang": "id",
+  "dir": "ltr",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
-  "shortcuts": [
-    {
-      "name": "Tambah Tugas",
-      "short_name": "Tugas+",
-      "url": "/YourTask/?action=tambah-tugas",
-      "icons": [{ "src": "/YourTask/icon.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Jadwal Hari Ini",
-      "short_name": "Jadwal",
-      "url": "/YourTask/?action=jadwal",
-      "icons": [{ "src": "/YourTask/icon.png", "sizes": "192x192" }]
-    }
-  ],
+  "orientation": "portrait-primary",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
+  "categories": [
+    "education",
+    "productivity"
+  ],
   "icons": [
     {
-      "src": "/YourTask/icon.png",
+      "src": "icon.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/YourTask/icon.png",
+      "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/YourTask/icon.png",
+      "src": "icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
