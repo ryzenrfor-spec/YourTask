@@ -1673,6 +1673,11 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       statusEl.textContent = "Pilih file PDF/gambar jadwal dulu.";
       return;
     }
+        if (file.size > 14 * 1024 * 1024) {
+      statusEl.style.color = "var(--amber-500)";
+      statusEl.textContent = "File kegedean (" + Math.round(file.size / 1048576) + " MB) — maks 14 MB. Kompres atau screenshot halamannya.";
+      return;
+        }
 
     btnAi.disabled = true;
     statusEl.style.color = "var(--text-muted)";
