@@ -1,5 +1,5 @@
-/* YourTask Service Worker (v21 - store-ready: scope-relative paths, valid PNG icons, host-agnostic) */
-const CACHE_NAME = 'yourtask-cache-v21';
+/* YourTask Service Worker (v22 - PWA update toast support) */
+const CACHE_NAME = 'yourtask-cache-v22';
 const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
 const PRECACHE_URLS = [

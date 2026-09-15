@@ -1427,7 +1427,17 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     }
     
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(function(err) {});
+      navigator.serviceWorker.register('./sw.js').then(function (reg) {
+        reg.addEventListener('updatefound', function () {
+          var nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', function () {
+            if (nw.state === 'activated' && navigator.serviceWorker.controller) {
+              showToast('Versi baru tersedia — muat ulang halaman untuk memakainya.');
+            }
+          });
+        });
+      }).catch(function () {});
     }
 
     setInterval(tickJam, 1000);
