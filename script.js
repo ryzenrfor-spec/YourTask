@@ -1,6 +1,13 @@
 (function () {
   "use strict";
 
+  /* ============================================================
+     YourTask — application logic (i18n edition)
+     Developed by ErlanggaDev Studios
+     All user-facing strings come from window.I18N (i18n.js).
+     Base locale: formal English; per-language dictionaries in i18n.js.
+     ============================================================ */
+
   /* --- LOCAL CONFIGURATION --- */
   var TZ = "Asia/Jakarta";
   var TZ_AUTO = "auto";
@@ -9,9 +16,17 @@
   }
   var currentTZ = TZ;
 
-  var NAMA_HARI = { 0: "Minggu", 1: "Senin", 2: "Selasa", 3: "Rabu", 4: "Kamis", 5: "Jumat", 6: "Sabtu" };
+  /* i18n helpers (safe fallbacks if i18n.js failed to load) */
+  function T(key, vars) {
+    if (window.I18N && window.I18N.t) return window.I18N.t(key, vars);
+    return key;
+  }
+  function dayLabel(d) {
+    if (window.I18N && window.I18N.dayName) return window.I18N.dayName(d);
+    return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d] || "";
+  }
 
-  /* --- STATE & ELEMEN --- */
+  /* --- STATE & ELEMENTS --- */
   var tugasList = [];
   var JADWAL = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
   var currentUsername = "";
@@ -25,17 +40,14 @@
   var editTaskId = null;
   var filterMapel = "semua";
   var cariTugas = "";
-  
+
 
   var el = {};
   function grab() {
     if (navigator.storage && navigator.storage.persist) {
-      navigator.storage.persist().then(function(persistent) {
-        if (persistent) {
-          console.log("Storage aman: Mode Persistent aktif.");
-        } else {
-          console.log("Storage berjalan di mode standar.");
-        }
+      navigator.storage.persist().then(function (persistent) {
+        if (persistent) console.log("Storage secure: persistent mode active.");
+        else console.log("Storage running in standard mode.");
       });
     }
 
@@ -126,20 +138,19 @@
     el.btnSubmitTugas = document.getElementById("btn-submit-tugas");
     el.inputBerulang = document.getElementById("input-berulang");
     el.inputBackupNama = document.getElementById("input-backup-nama");
-    
   }
 
-  /* --- PENYIMPANAN: INDEXEDDB TERENKRIPSI (AES-256-GCM, Web Crypto API) --- */
-  /* Semua data (tugas, jadwal, profil, hari aktif, key AI) disimpan terenkripsi
-     di store "enc" memakai AES-256-GCM (NIST SP 800-38D). Kunci AES-256
-     non-extractable dibuat sekali lalu disimpan sebagai objek CryptoKey di DB
-     terpisah "yourtask-keys-v1" — materi kunci tidak bisa diekspor/dibaca
-     oleh JavaScript apa pun. Browser tanpa Web Crypto (konteks non-HTTPS)
-     jatuh ke mode plain agar aplikasi tetap berjalan. */
+  /* --- STORAGE: ENCRYPTED INDEXEDDB (AES-256-GCM, Web Crypto API) --- */
+  /* All data (tasks, schedule, profile, active days, AI key) is stored
+     encrypted in the "enc" store using AES-256-GCM (NIST SP 800-38D). The
+     non-extractable AES-256 key is generated once and kept as a CryptoKey
+     object in a separate DB "yourtask-keys-v1" — the key material cannot be
+     exported or read by any JavaScript. Browsers without Web Crypto
+     (non-HTTPS context) fall back to plain mode so the app keeps working. */
   var IDB_NAME = "yourtask-db-v1";
   var IDB_VERSION = 2;
   var IDB_STORE = "enc";
-  var IDB_LEGACY_STORE = "state"; /* store mirror lama (plaintext) — dibersihkan saat migrasi */
+  var IDB_LEGACY_STORE = "state"; /* legacy plaintext mirror — cleaned during migration */
   var KEY_DB_NAME = "yourtask-keys-v1";
   var KEY_DB_STORE = "keys";
   var KEY_ID = "app";
@@ -187,7 +198,7 @@
       });
     }).then(function (ada) {
       if (ada) return ada;
-      if (!(window.crypto && window.crypto.subtle)) return null; /* fallback: tanpa enkripsi */
+      if (!(window.crypto && window.crypto.subtle)) return null; /* fallback: unencrypted */
       return window.crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"])
         .then(function (kunci) {
           return openKeyDB().then(function (db) {
@@ -219,7 +230,7 @@
       var iv = window.crypto.getRandomValues(new Uint8Array(12));
       return window.crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, ck, new TextEncoder().encode(json))
         .then(function (buf) { return tulis({ key: key, iv: iv.buffer, data: buf }); });
-    }).catch(function (e) { console.warn("Gagal menyimpan data:", e); });
+    }).catch(function (e) { console.warn("Failed to save data:", e); });
   }
 
   function encGet(key) {
@@ -236,7 +247,7 @@
         return window.crypto.subtle.decrypt({ name: "AES-GCM", iv: new Uint8Array(rec.iv) }, ck, rec.data)
           .then(function (buf) { return JSON.parse(new TextDecoder().decode(buf)); });
       });
-    }).catch(function (e) { console.warn("Gagal membaca data:", e); return null; });
+    }).catch(function (e) { console.warn("Failed to read data:", e); return null; });
   }
 
   function encDel(key) {
@@ -247,7 +258,7 @@
         tx.oncomplete = function () { resolve(); };
         tx.onerror = function () { reject(tx.error); };
       });
-    }).catch(function (e) { console.warn("Gagal menghapus data:", e); });
+    }).catch(function (e) { console.warn("Failed to delete data:", e); });
   }
 
   function mirrorStateToIDB() {
@@ -256,18 +267,18 @@
     encPut("timezone", currentTZ);
   }
 
-  /* ==================== TEMA: WALLPAPER, AKSEN & IKON ====================
-     Semua tersimpan terenkripsi di IndexedDB (kunci "theme" & "iconCustom").
-     Wallpaper dipangkas via crop editor (pan/pinch/zoom) menjadi JPEG dataURL
-     terkompresi (maks 1600px sisi terpanjang, q0.72) supaya IDB tetap ramping.
-     Ikon dipangkas persegi (maks 256px, PNG). */
+  /* ==================== THEME: WALLPAPER, ACCENT & ICON ====================
+     Stored encrypted in IndexedDB (keys "theme" & "iconCustom").
+     Wallpapers are cropped via the crop editor (pan/pinch/zoom) into a
+     compressed JPEG dataURL (max 1600px longest side, q0.72) to keep IDB
+     lean. Icons are cropped square (max 256px, PNG). */
   var TEMA_PRESETS = [
-    { id: "default", nama: "Default", css: null },
-    { id: "senja", nama: "Senja", css: "linear-gradient(160deg, #2b1055 0%, #7597de 55%, #f7b3a1 100%)" },
-    { id: "hutan", nama: "Hutan", css: "linear-gradient(165deg, #0b2b26 0%, #14532d 55%, #365314 100%)" },
-    { id: "laut", nama: "Laut", css: "linear-gradient(170deg, #082f49 0%, #0c4a6e 55%, #164e63 100%)" },
-    { id: "galaksi", nama: "Galaksi", css: "radial-gradient(120% 90% at 20% 0%, #4c1d95 0%, #1e1b4b 45%, #020617 100%)" },
-    { id: "sakura", nama: "Sakura", css: "linear-gradient(160deg, #831843 0%, #9d174d 50%, #be185d 100%)" }
+    { id: "default", label: "theme.preset.default", css: null },
+    { id: "senja", label: "theme.preset.dusk", css: "linear-gradient(160deg, #2b1055 0%, #7597de 55%, #f7b3a1 100%)" },
+    { id: "hutan", label: "theme.preset.forest", css: "linear-gradient(165deg, #0b2b26 0%, #14532d 55%, #365314 100%)" },
+    { id: "laut", label: "theme.preset.ocean", css: "linear-gradient(170deg, #082f49 0%, #0c4a6e 55%, #164e63 100%)" },
+    { id: "galaksi", label: "theme.preset.galaxy", css: "radial-gradient(120% 90% at 20% 0%, #4c1d95 0%, #1e1b4b 45%, #020617 100%)" },
+    { id: "sakura", label: "theme.preset.sakura", css: "linear-gradient(160deg, #831843 0%, #9d174d 50%, #be185d 100%)" }
   ];
   var WARNA_PRESETS = [
     { id: "teal", rgb: "20, 184, 166" },
@@ -277,8 +288,8 @@
     { id: "oranye", rgb: "249, 115, 22" }
   ];
   var temaState = { wallpaper: null, accent: null, dim: 12, zoom: 100, x: 0, y: 0 };
-  var ikonState = null; /* { dataUrl, zoom, x, y } atau null = default */
-  var cropCtx = null; /* konteks editor yang sedang aktif */
+  var ikonState = null; /* { dataUrl, zoom, x, y } or null = default */
+  var cropCtx = null; /* active editor context */
 
   function hexToRgbTriplet(hex) {
     var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
@@ -291,7 +302,7 @@
     var s = temaState;
     var layer = el.wallpaperLayer;
     if (!layer) return;
-    /* Layer dipasang di <html> (bukan body) supaya tidak tertutup background body */
+    /* The layer is attached to <html> (not body) so the opaque body background cannot cover it */
     if (layer.parentElement !== document.documentElement) {
       document.documentElement.appendChild(layer);
     }
@@ -317,7 +328,7 @@
       adaWallpaper = true;
       layer.className = "tema-gradient";
       layer.style.backgroundImage = preset.css;
-      layer.style.setProperty("--wp-dim", Math.round((s.dim || 0) / 2)); /* gradient sudah terdesain, dim separuh */
+      layer.style.setProperty("--wp-dim", Math.round((s.dim || 0) / 2)); /* gradients are pre-designed, halve the dim */
     }
     document.documentElement.classList.toggle("has-wallpaper", adaWallpaper);
     document.body.classList.toggle("has-wallpaper", adaWallpaper);
@@ -343,7 +354,7 @@
         prev.innerHTML = "";
         var img = document.createElement("img");
         img.src = ikonState.dataUrl;
-        img.alt = "Ikon kustom";
+        img.alt = T("prof.customIconAlt");
         prev.appendChild(img);
       } else {
         prev.textContent = "Y";
@@ -363,7 +374,7 @@
       if (i && i.dataUrl && typeof i.dataUrl === "string" && i.dataUrl.indexOf("data:image/") === 0) {
         ikonState = { dataUrl: i.dataUrl, zoom: i.zoom || 100, x: i.x || 0, y: i.y || 0 };
       }
-    } catch (e) { /* tema korup / lama: pakai default */ }
+    } catch (e) { /* corrupt/legacy theme: keep defaults */ }
     applyTemaVisual();
     applyIkonVisual();
     renderTemaPresets();
@@ -387,10 +398,10 @@
       btn.type = "button";
       btn.className = "preset-swatch";
       btn.style.background = p.css || "var(--navy-900)";
-      btn.setAttribute("aria-label", "Tema " + p.nama);
+      btn.setAttribute("aria-label", T(p.label));
       var nm = document.createElement("span");
       nm.className = "preset-name";
-      nm.textContent = p.nama;
+      nm.textContent = T(p.label);
       btn.appendChild(nm);
       if (temaState.wallpaper === p.id) btn.classList.add("active");
       btn.addEventListener("click", function () {
@@ -398,7 +409,7 @@
         simpanTema();
         applyTemaVisual();
         renderTemaPresets();
-        showToast("Tema \"" + p.nama + "\" diterapkan.");
+        showToast(T("theme.applied", { name: T(p.label) }));
       });
       grid.appendChild(btn);
     });
@@ -414,7 +425,7 @@
       btn.className = "preset-swatch";
       btn.style.background = "rgb(" + w.rgb + ")";
       btn.style.height = "34px";
-      btn.setAttribute("aria-label", "Aksen " + w.id);
+      btn.setAttribute("aria-label", w.id);
       if (temaState.accent === w.rgb) btn.classList.add("active");
       btn.addEventListener("click", function () {
         temaState.accent = (w.id === "teal") ? null : w.rgb; /* teal = default */
@@ -435,8 +446,8 @@
     }
   }
 
-  /* --- Crop editor generik (dipakai wallpaper & ikon) ---
-     Interaksi: drag = geser, pinch (2 jari) / roda / slider = zoom. */
+  /* --- Generic crop editor (shared by wallpaper & icon) ---
+     Interactions: drag = move, pinch (2 fingers) / wheel / slider = zoom. */
   function bukaCropEditor(opts) {
     var stage = opts.stage;
     var img = stage.querySelector(".crop-img");
@@ -448,11 +459,11 @@
       onChange: opts.onChange || function () {},
       onApply: opts.onApply || function () {}
     };
-    /* Sumber kebenaran per-editor: ctx milik stage ini (bukan global),
-       agar dua editor terbuka bersamaan tidak saling menimpa. */
+    /* Per-editor source of truth: the context belongs to this stage (not
+       global), so two open editors never overwrite each other. */
     stage._cropCtx = cropCtx;
     var mulai = function () {
-      /* Tampilkan wrap DULU, sesuaikan ukuran stage, baru ukur: hidden = 0 */
+      /* Unhide the wrap FIRST, size the stage, then measure: hidden = 0 */
       opts.wrap.hidden = false;
       if (opts.seuaiLayar) sesuaikanStageLayar(stage);
       fitCrop(cropCtx);
@@ -460,7 +471,7 @@
     img.onload = mulai;
     img.src = opts.dataUrl;
     if (img.complete && img.naturalWidth > 0) {
-      /* data URI yang sudah ter-decode: onload mungkin tidak terpanggil lagi */
+      /* already-decoded data URI: onload may not fire again */
       img.onload = null;
       mulai();
     }
@@ -469,8 +480,8 @@
   function fitCrop(ctx) {
     if (!ctx) return;
     var stage = ctx.stage, img = ctx.img;
-    /* Stage bisa masih hidden saat editor dibuka -> clientWidth/Height = 0.
-       Ukur setelah wrap ditampilkan, atau pakai ukuran preset fallback. */
+    /* The stage may still be hidden when the editor opens -> clientWidth/Height = 0.
+       Measure after the wrap is shown, or fall back to preset sizes. */
     var sw = stage.clientWidth || 320;
     var sh = stage.clientHeight || 180;
     var iw = img.naturalWidth || 1, ih = img.naturalHeight || 1;
@@ -491,14 +502,15 @@
     img.style.transform = t;
   }
 
-  /* Stage wallpaper PERSIS rasio viewport: dengan rasio yang sama, background
-     cover memetakan hasil crop 1:1 ke layar — framing = hasil akhir, tanpa
-     re-zoom. Saat layar potret, lebar stage menyempit agar tingginya muat. */
+  /* The wallpaper stage matches the viewport aspect ratio EXACTLY: with equal
+     ratios, background cover maps the crop 1:1 onto the screen — what you
+     frame is what you get, no re-zoom. On portrait screens the stage narrows
+     to fit the editor height limit. */
   function sesuaikanStageLayar(stage) {
     if (!stage) return;
     var vw = window.innerWidth || 390;
     var vh = window.innerHeight || 844;
-    var rasio = vw / vh; /* <1 di potret, >1 di lanskap */
+    var rasio = vw / vh; /* <1 portrait, >1 landscape */
     var lebarMaks = (stage.parentElement && stage.parentElement.clientWidth) || Math.min(400, vw - 72);
     var tinggiMaks = Math.max(220, Math.round(vh * 0.5));
     var lebar = Math.min(lebarMaks, Math.round(tinggiMaks * rasio));
@@ -511,8 +523,9 @@
 
   var cropInteraksiTerpasang = { tema: null, ikon: null };
   function pasangCropInteraksi(stageKey, stage, ctxGetter) {
-    /* Pasang listener HANYA SEKALI per stage; ctx diambil dinamis lewat ctxGetter.
-       (Dulu ctx lama ter-capture saat pemasangan -> editor rusak di pemakaian kedua) */
+    /* Listeners attach ONCE per stage; the ctx is fetched dynamically via
+       ctxGetter. (Previously the old ctx was captured at attach time, which
+       broke the editor on second use.) */
     if (cropInteraksiTerpasang[stageKey]) return;
     cropInteraksiTerpasang[stageKey] = true;
     var ctx = null;
@@ -574,7 +587,7 @@
     }, { passive: false });
   }
 
-  /* Slider zoom: dipasang sekali per range; ctx diambil dinamis lewat getCtx */
+  /* Zoom slider: attached once per range; the ctx is fetched dynamically */
   function pasangZoomRange(range, getCtx) {
     if (!range || range.dataset.zoomBound) return;
     range.dataset.zoomBound = "1";
@@ -607,7 +620,7 @@
     cv.width = Math.round(sw * scale);
     cv.height = Math.round(sh * scale);
     var cx2 = cv.getContext("2d");
-    /* Transformasi stage → canvas: (px + ctx.x) * scale; posisi img dasar: center */
+    /* Stage → canvas transform: (px + ctx.x) * scale; the base image is centered */
     var iw = img.naturalWidth, ih = img.naturalHeight;
     var drawW = iw * ctx.scale, drawH = ih * ctx.scale;
     var dx = (sw - drawW) / 2 + ctx.x;
@@ -618,7 +631,7 @@
   }
 
   function bacaFileGambar(file, ukuranMaks, cb) {
-    if (!file || !/^image\//.test(file.type)) { showToast("File harus berupa gambar."); return; }
+    if (!file || !/^image\//.test(file.type)) { showToast(T("theme.fileNotImage")); return; }
     var reader = new FileReader();
     reader.onload = function (ev) {
       var img = new Image();
@@ -631,7 +644,7 @@
         cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
         cb(cv.toDataURL("image/jpeg", 0.85));
       };
-      img.onerror = function () { showToast("Gambar tidak bisa dibaca."); };
+      img.onerror = function () { showToast(T("theme.imageUnreadable")); };
       img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
@@ -646,7 +659,7 @@
         if (!file) return;
         bacaFileGambar(file, 2000, function (dataUrl) {
           bukaCropEditor({
-            stage: el.temaCropStage, range: el.temaZoomRange, /* cropInteraksiTema */
+            stage: el.temaCropStage, range: el.temaZoomRange,
             seuaiLayar: true,
             wrap: el.temaEditorWrap, dataUrl: dataUrl,
             onApply: function (hasil) {
@@ -657,9 +670,8 @@
               renderTemaPresets();
               el.temaEditorWrap.hidden = true;
               cropCtx = null;
-              showToast("Wallpaper diterapkan.");
+              showToast(T("theme.wallpaperApplied"));
               if (el.temaCropStage) el.temaCropStage._cropCtx = null;
-              cropCtx = null;
             }
           });
           pasangCropInteraksi("tema", el.temaCropStage, function () { return cropCtx; });
@@ -699,9 +711,9 @@
     if (el.temaWarnaInput) el.temaWarnaInput.addEventListener("change", function () {
       simpanTema();
       renderWarnaPresets();
-      showToast("Warna aksen diperbarui.");
+      showToast(T("theme.accentUpdated"));
     });
-    /* --- Ikon --- */
+    /* --- Icon --- */
     if (el.inputIkonGaleri) {
       el.inputIkonGaleri.addEventListener("change", function (e) {
         var file = e.target.files && e.target.files[0];
@@ -709,7 +721,7 @@
         if (!file) return;
         bacaFileGambar(file, 1024, function (dataUrl) {
           bukaCropEditor({
-            stage: el.ikonCropStage, range: el.ikonZoomRange, /* cropInteraksiIkon */
+            stage: el.ikonCropStage, range: el.ikonZoomRange,
             wrap: el.ikonEditorWrap, dataUrl: dataUrl,
             onApply: function (hasil) {
               ikonState = { dataUrl: hasil, zoom: 100, x: 0, y: 0 };
@@ -717,9 +729,8 @@
               applyIkonVisual();
               el.ikonEditorWrap.hidden = true;
               cropCtx = null;
-              showToast("Ikon kustom diterapkan.");
+              showToast(T("theme.iconApplied"));
               if (el.ikonCropStage) el.ikonCropStage._cropCtx = null;
-              cropCtx = null;
             }
           });
           pasangCropInteraksi("ikon", el.ikonCropStage, function () { return cropCtx; });
@@ -744,11 +755,11 @@
       ikonState = null;
       encPut("iconCustom", null);
       applyIkonVisual();
-      showToast("Ikon kembali ke bawaan.");
+      showToast(T("theme.iconReset"));
     });
   }
 
-  /* --- MIGRASI: pindahkan data lama dari localStorage ke IndexedDB terenkripsi --- */
+  /* --- MIGRATION: move legacy data from localStorage to encrypted IndexedDB --- */
   function migrasiLocalStorage() {
     var pasangan = [
       ["tasks", "yourtask_tugas_v1"],
@@ -781,7 +792,7 @@
     return rantai.then(hapusStoreLama);
   }
 
-  /* Hapus mirror plaintext lama di store "state" agar tidak ada salinan tak terenkripsi */
+  /* Remove the legacy plaintext mirror in the "state" store so no unencrypted copy remains */
   function hapusStoreLama() {
     return openStateDB().then(function (db) {
       if (!db.objectStoreNames.contains(IDB_LEGACY_STORE)) return;
@@ -803,7 +814,7 @@
       if (typeof savedUser === "string" && savedUser.trim() !== "") {
         currentUsername = savedUser;
       } else {
-        currentUsername = "Pengguna Baru";
+        currentUsername = T("user.default");
         encPut("username", currentUsername);
       }
       if (el.displayUser) el.displayUser.textContent = currentUsername;
@@ -811,18 +822,18 @@
       if (typeof savedSchool === "string" && savedSchool.trim() !== "") {
         currentSchool = savedSchool;
       } else {
-        currentSchool = "Asal Sekolah";
+        currentSchool = T("school.default");
         encPut("school", currentSchool);
       }
       if (el.displaySekolah) el.displaySekolah.textContent = currentSchool;
 
       currentTZ = (typeof savedTZ === "string" && savedTZ && savedTZ !== TZ_AUTO && savedTZ !== "") ? savedTZ : deteksiZona();
     }).catch(function (e) {
-      console.error("Gagal memuat profil", e);
+      console.error("Failed to load profile", e);
     });
   }
 
-  /* --- SANITASI DATA: rekaman rusak/korup tidak boleh merusak aplikasi --- */
+  /* --- DATA SANITIZATION: corrupt records must never break the app --- */
   function bersihkanJadwal(v) {
     var bersih = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
     if (!v || typeof v !== "object" || Array.isArray(v)) return bersih;
@@ -881,7 +892,7 @@
       mirrorStateToIDB();
     } catch (e) {}
   }
-  
+
   function muatTugas() {
     return encGet("tasks").then(function (v) {
       tugasList = bersihkanTugas(v);
@@ -902,15 +913,15 @@
     if (allowEmpty) {
       var o0 = document.createElement("option");
       o0.value = "";
-      o0.textContent = "— Otomatis (sesuai urutan waktu) —";
+      o0.textContent = T("jform.auto");
       selectElement.appendChild(o0);
     } else {
-      selectElement.innerHTML = '<option value="">— Pilih Jam Ke (1-100) —</option>';
+      selectElement.innerHTML = '<option value="">' + T("jform.pickPeriod") + "</option>";
     }
     var usedJamKe = new Set();
     var hariList = JADWAL[dayIndex] || [];
 
-    hariList.forEach(function(item, idx) {
+    hariList.forEach(function (item, idx) {
       if (selectedScheduleIndex !== null && dayIndex === hariDipilih && idx === selectedScheduleIndex) {
         return;
       }
@@ -923,7 +934,7 @@
       if (!usedJamKe.has(i)) {
         var opt = document.createElement("option");
         opt.value = i;
-        opt.textContent = "Jam ke-" + i;
+        opt.textContent = T("jform.periodN", { n: i });
         if (currentJamKe && parseInt(currentJamKe, 10) === i) {
           opt.selected = true;
         }
@@ -939,35 +950,35 @@
       username: currentUsername,
       sekolah: currentSchool,
       hariAktif: hariAktif,
-            timezone: currentTZ,
+      timezone: currentTZ,
       tema: { wallpaper: temaState.wallpaper, accent: temaState.accent, dim: temaState.dim },
       ikon: ikonState
-    
     };
-     var namaCustom = el.inputBackupNama ? el.inputBackupNama.value.trim() : "";
+    var namaCustom = el.inputBackupNama ? el.inputBackupNama.value.trim() : "";
     encPut("backupNama", namaCustom);
     var d = new Date();
     var pad2 = function (x) { return (x < 10 ? "0" : "") + x; };
     var stamp = d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + "_" + pad2(d.getHours()) + "-" + pad2(d.getMinutes());
-    var aman = namaCustom.replace(/[\\\/:*?"<>|]/g, "").trim();
-    var blob = new Blob([JSON.stringify(dataExport, null, 2)], { type: 'application/json' });
+    var aman = namaCustom.replace(/[\\/:*?"<>|]/g, "").trim();
+    var blob = new Blob([JSON.stringify(dataExport, null, 2)], { type: "application/json" });
     var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
+    var a = document.createElement("a");
     a.href = url;
     a.download = (aman || ("YourTask_Backup_" + stamp)) + ".json";
     a.click();
-    URL.revokeObjectURL(url); 
-    } 
+    URL.revokeObjectURL(url);
+  }
+
   function importData(e) {
     var file = e.target.files[0];
     if (!file) return;
     var reader = new FileReader();
-    reader.onload = function(ev) {
+    reader.onload = function (ev) {
       try {
         var parsed = JSON.parse(ev.target.result);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Format backup tidak valid");
-        if (parsed.tugas && !Array.isArray(parsed.tugas)) throw new Error("Data tugas tidak valid");
-        if (parsed.jadwal && (typeof parsed.jadwal !== "object" || Array.isArray(parsed.jadwal))) throw new Error("Data jadwal tidak valid");
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid backup format");
+        if (parsed.tugas && !Array.isArray(parsed.tugas)) throw new Error("Invalid task data");
+        if (parsed.jadwal && (typeof parsed.jadwal !== "object" || Array.isArray(parsed.jadwal))) throw new Error("Invalid schedule data");
         var pekerjaan = [];
         if (parsed.tugas) pekerjaan.push(encPut("tasks", parsed.tugas));
         if (parsed.jadwal) pekerjaan.push(encPut("schedule", parsed.jadwal));
@@ -977,7 +988,7 @@
         if (parsed.timezone && /^[A-Za-z_]+\/[A-Za-z_+\-0-9]+$/.test(parsed.timezone)) {
           currentTZ = parsed.timezone;
           pekerjaan.push(encPut("timezone", currentTZ));
-                }
+        }
         if (parsed.tema && typeof parsed.tema === "object") {
           var t = parsed.tema;
           var temaBersih = {
@@ -992,25 +1003,25 @@
         if (parsed.ikon && parsed.ikon.dataUrl && typeof parsed.ikon.dataUrl === "string" && parsed.ikon.dataUrl.indexOf("data:image/") === 0) {
           pekerjaan.push(encPut("iconCustom", { dataUrl: parsed.ikon.dataUrl, zoom: parsed.ikon.zoom || 100, x: parsed.ikon.x || 0, y: parsed.ikon.y || 0 }));
         }
-        
 
-        showToast("Data berhasil di-restore! Memuat ulang...");
+        showToast(T("misc.restoreOk"));
         Promise.all(pekerjaan).catch(function () {}).then(function () {
-          setTimeout(function() { location.reload(); }, 1200);
+          setTimeout(function () { location.reload(); }, 1200);
         });
       } catch (err) {
-        showToast("Waduh, file JSON-nya tidak valid atau rusak.");
+        showToast(T("misc.restoreInvalid"));
       }
     };
     reader.readAsText(file);
   }
-  
-  /* --- SINKRONISASI WAKTU SERVER (kompensasi jam perangkat yang salah) --- */
-  /* Jika jam internal HP/laptop diubah manual, hitungan KBM & deadline ikut kacau.
-     Solusi: ambil waktu dari time API, hitung offset (waktu server - waktu perangkat)
-     dengan mengompensasi RTT jaringan, lalu pakai offset itu di nowWIB().
-     Offset disimpan terenkripsi, cache 7 hari, dan divalidasi ulang tiap 6 jam.
-     Gagal jaringan = aman: fallback ke jam perangkat. */
+
+  /* --- SERVER TIME SYNC (compensates an incorrect device clock) --- */
+  /* If the device clock was changed manually, class status & deadlines break.
+     Fix: fetch the time from a time API, compute the offset
+     (serverTime - deviceTime) compensating network RTT, then use that offset
+     in nowWIB(). The offset is stored encrypted, cached for 7 days, and
+     re-validated every 6 hours. Network failure = safe fallback to the
+     device clock. */
   var waktuOffsetMs = 0; /* serverTime ~= deviceTime + offset */
   var WAKTU_KEY = "waktuOffset";
 
@@ -1022,17 +1033,17 @@
       .then(function (data) {
         if (!data || typeof data.unixtime !== "number") return;
         var rtt = Date.now() - mulai;
-        /* Perkiraan waktu server saat respons TIBA: unixtime + setengah RTT.
-           Hanya dipakai bila selisihnya signifikan (> 90 detik). */
+        /* Estimated server time at ARRIVAL: unixtime + half RTT.
+           Only used when the drift is significant (> 90 seconds). */
         var tiba = data.unixtime * 1000 + Math.round(rtt / 2);
         var offset = tiba - Date.now();
         if (Math.abs(offset) > 90 * 1000) {
           waktuOffsetMs = offset;
           encPut(WAKTU_KEY, { offset: waktuOffsetMs, disinkron: Date.now() });
-          console.info("Waktu disinkronkan ke server (selisih " + Math.round(offset / 1000) + " detik).");
+          console.info("Time synced to server (drift " + Math.round(offset / 1000) + " seconds).");
         }
       })
-      .catch(function () { /* offline / API down -> pakai jam perangkat */ });
+      .catch(function () { /* offline / API down -> use the device clock */ });
   }
 
   function muatOffsetWaktu() {
@@ -1044,25 +1055,22 @@
   }
 
   function nowWIB() {
-    var parts = new Intl.DateTimeFormat("id-ID", {
-      timeZone: currentTZ, weekday: "long", year: "numeric", month: "2-digit",
+    /* en-US parts => locale-independent weekday mapping */
+    var parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: currentTZ, weekday: "short", year: "numeric", month: "2-digit",
       day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
     }).formatToParts(new Date(Date.now() + waktuOffsetMs));
 
     var map = {};
     parts.forEach(function (p) { map[p.type] = p.value; });
 
-    var dayIndex = 0;
-    for (var i = 0; i < 7; i++) {
-      if (NAMA_HARI[i].toLowerCase() === (map.weekday || "").toLowerCase()) {
-        dayIndex = i; break;
-      }
-    }
+    var WD = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    var dayIndex = WD.hasOwnProperty(map.weekday) ? WD[map.weekday] : 0;
     var jam = parseInt(map.hour, 10);
     if (jam === 24) jam = 0;
 
     return {
-      dayIndex: dayIndex, hari: NAMA_HARI[dayIndex], jam: jam,
+      dayIndex: dayIndex, hari: dayLabel(dayIndex), jam: jam,
       menit: parseInt(map.minute, 10), detik: parseInt(map.second, 10),
       tanggal: parseInt(map.day, 10), bulan: map.month, tahun: parseInt(map.year, 10),
       totalMenit: jam * 60 + parseInt(map.minute, 10),
@@ -1070,7 +1078,7 @@
   }
 
   function jamKeMenit(hhmm) {
-    var b = (hhmm||"00:00").split(":");
+    var b = (hhmm || "00:00").split(":");
     return parseInt(b[0], 10) * 60 + parseInt(b[1], 10);
   }
   function pad(n) { return n < 10 ? "0" + n : "" + n; }
@@ -1080,8 +1088,8 @@
     return pad(parseInt(b[0], 10) || 0) + ":" + pad(parseInt(b[1], 10) || 0);
   }
 
-  /* Deteksi dua baris jadwal yang rentang waktunya saling bertabrakan (overlap).
-     Dipakai form tambah & edit; baris yang sedang diedit dikecualikan. */
+  /* Detects two schedule rows whose time ranges overlap.
+     Used by the add & edit forms; the row being edited is excluded. */
   function adaTabrakanJadwal(daftar, mulaiBaru, selesaiBaru, abaikanIdx) {
     var m1 = jamKeMenit(mulaiBaru), m2 = jamKeMenit(selesaiBaru);
     for (var i = 0; i < daftar.length; i++) {
@@ -1092,10 +1100,10 @@
     return null;
   }
 
-  /* Urutan otomatis: baris dgn jamKe diurutkan per nomor jamKe lalu waktu.
-     Baris TANPA jamKe (istirahat dll.) disisipkan tepat di antara dua pelajaran
-     yang waktunya mengapitnya. Contoh: istirahat 08:00 muncul persis
-     setelah Matematika 07:15-08:00, sebelum pelajaran 08:20. */
+  /* Automatic ordering: rows with a period number sort by number then time.
+     Rows WITHOUT a period (breaks etc.) are inserted exactly between the two
+     lessons that bracket them in time. Example: a break at 08:00 appears
+     right after Mathematics 07:15-08:00, before the 08:20 lesson. */
   function urutkanJadwal(list) {
     var withKey = [], noKey = [];
     (list || []).forEach(function (s) {
@@ -1118,6 +1126,7 @@
     while (noKey.length) hasil.push(noKey.shift());
     return hasil;
   }
+
   function terapkanLabelZona() {
     var label = currentTZ;
     try {
@@ -1128,19 +1137,25 @@
     } catch (e) {}
     var zc = document.getElementById("clock-zone");
     if (zc) zc.textContent = label;
-    ["input-jadwal-mulai", "input-jadwal-selesai", "input-edit-mulai", "input-edit-selesai"].forEach(function (id) {
-      var lb = document.querySelector('label[for="' + id + '"]');
-      if (lb) lb.textContent = lb.textContent.replace(/\s*\([^)]*\)\s*$/, "") + " (" + label + ")";
+    var map = { "label-jadwal-mulai": "jform.start", "label-jadwal-selesai": "jform.end", "label-edit-mulai": "jform.start", "label-edit-selesai": "jform.end" };
+    Object.keys(map).forEach(function (id) {
+      var lb = document.getElementById(id);
+      if (lb) lb.textContent = T(map[id]) + " (" + label + ")";
     });
   }
-  
+
   function tickJam() {
     var n = nowWIB();
     if (el.jam) el.jam.textContent = pad(n.jam) + ":" + pad(n.menit) + ":" + pad(n.detik);
     if (el.hari) el.hari.textContent = n.hari + ", " + pad(n.tanggal) + "/" + n.bulan + "/" + n.tahun;
   }
-  
-  function updateStatusKBM() {
+
+  function zonaLabel() {
+    var zc = document.getElementById("clock-zone");
+    return zc ? zc.textContent : currentTZ;
+  }
+
+  function updateClassStatus() {
     if (!el.cardStatus) return;
     var n = nowWIB();
     var jadwalHari = (hariAktif.indexOf(n.dayIndex) !== -1 ? JADWAL[n.dayIndex] : null) || null;
@@ -1150,10 +1165,10 @@
     if (el.statusNext) el.statusNext.textContent = "";
 
     if (!jadwalHari || jadwalHari.length === 0) {
-      if (el.statusLabel) el.statusLabel.textContent = "Libur / Kosong";
+      if (el.statusLabel) el.statusLabel.textContent = T("status.holiday");
       if (el.statusJamKe) el.statusJamKe.textContent = "";
-      if (el.statusMapel) el.statusMapel.textContent = "Tidak Ada Jadwal";
-      if (el.statusDetail) el.statusDetail.textContent = "Belum ada jadwal untuk hari " + n.hari + ".";
+      if (el.statusMapel) el.statusMapel.textContent = T("status.none");
+      if (el.statusDetail) el.statusDetail.textContent = T("status.noneDetail", { day: n.hari });
       renderStatusNextHariLain(n.dayIndex);
       return;
     }
@@ -1180,14 +1195,14 @@
       var berlangsung = slotAktif.tipe !== "istirahat";
       if (berlangsung) {
         el.cardStatus.classList.add("is-active");
-        if (el.statusLabel) el.statusLabel.textContent = "Sedang Berlangsung";
+        if (el.statusLabel) el.statusLabel.textContent = T("status.ongoing");
       } else {
-        if (el.statusLabel) el.statusLabel.textContent = "Istirahat";
+        if (el.statusLabel) el.statusLabel.textContent = T("status.break");
       }
 
-      if (el.statusJamKe) el.statusJamKe.textContent = slotAktif.jamKe ? "Jam ke-" + slotAktif.jamKe : "";
+      if (el.statusJamKe) el.statusJamKe.textContent = slotAktif.jamKe ? T("status.period", { n: slotAktif.jamKe }) : "";
       if (el.statusMapel) el.statusMapel.textContent = slotAktif.mapel;
-      if (el.statusDetail) el.statusDetail.textContent = "Pukul " + slotAktif.mulai + " – " + slotAktif.selesai + " WIB";
+      if (el.statusDetail) el.statusDetail.textContent = T("status.timeRange", { start: slotAktif.mulai, end: slotAktif.selesai, tz: zonaLabel() });
 
       var m1a = jamKeMenit(slotAktif.mulai);
       var m2a = jamKeMenit(slotAktif.selesai);
@@ -1198,31 +1213,31 @@
 
       if (el.progWrap) el.progWrap.hidden = false;
       if (el.progFill) el.progFill.style.width = persen + "%";
-      if (el.progText) el.progText.textContent = "sisa " + sisa + " mnt";
+      if (el.progText) el.progText.textContent = T("status.remaining", { n: sisa });
 
       if (slotBerikut && el.statusNext) {
-        el.statusNext.innerHTML = "Berikutnya: <strong>" + escapeHtml(slotBerikut.mapel) + "</strong> (" + slotBerikut.mulai + ")";
+        el.statusNext.innerHTML = T("status.next", { subject: escapeHtml(slotBerikut.mapel), time: slotBerikut.mulai });
       }
       return;
     }
 
-    if (el.statusLabel) el.statusLabel.textContent = "Luar Jam KBM";
-    if (el.statusMapel) el.statusMapel.textContent = "Tidak Ada KBM";
+    if (el.statusLabel) el.statusLabel.textContent = T("status.outside");
+    if (el.statusMapel) el.statusMapel.textContent = T("status.noclass");
     if (el.statusJamKe) el.statusJamKe.textContent = "";
 
     var jamPertama = jadwalHari[0];
     var jamTerakhir = jadwalHari[jadwalHari.length - 1];
 
     if (sekarang < jamKeMenit(jamPertama.mulai)) {
-      if (el.statusDetail) el.statusDetail.textContent = "Belum ada KBM. Dimulai pukul " + jamPertama.mulai + " WIB.";
-      if (el.statusNext) el.statusNext.innerHTML = "Pelajaran pertama: <strong>" + escapeHtml(jamPertama.mapel) + "</strong> (" + jamPertama.mulai + ")";
+      if (el.statusDetail) el.statusDetail.textContent = T("status.beforeStart", { time: jamPertama.mulai, tz: zonaLabel() });
+      if (el.statusNext) el.statusNext.innerHTML = T("status.firstLesson", { subject: escapeHtml(jamPertama.mapel), time: jamPertama.mulai });
     } else if (sekarang >= jamKeMenit(jamTerakhir.selesai)) {
-      if (el.statusDetail) el.statusDetail.textContent = "KBM hari ini sudah selesai.";
+      if (el.statusDetail) el.statusDetail.textContent = T("status.afterDone");
       renderStatusNextHariLain(n.dayIndex);
     } else {
-      if (el.statusDetail) el.statusDetail.textContent = "Di luar jam pelajaran.";
+      if (el.statusDetail) el.statusDetail.textContent = T("status.outsideDetail");
       if (slotBerikut && el.statusNext) {
-        el.statusNext.innerHTML = "Berikutnya: <strong>" + escapeHtml(slotBerikut.mapel) + "</strong> (" + slotBerikut.mulai + ")";
+        el.statusNext.innerHTML = T("status.next", { subject: escapeHtml(slotBerikut.mapel), time: slotBerikut.mulai });
       }
     }
   }
@@ -1232,10 +1247,10 @@
       var d = (fromDayIndex + add) % 7;
       if (hariAktif.indexOf(d) === -1) continue;
       if (JADWAL[d] && JADWAL[d].length > 0) {
-        var label = add === 1 ? "Besok (" + NAMA_HARI[d] + ")" : NAMA_HARI[d];
+        var label = add === 1 ? T("status.tomorrow", { day: dayLabel(d) }) : dayLabel(d);
         var first = JADWAL[d][0];
         if (el.statusNext) {
-          el.statusNext.innerHTML = "KBM berikutnya: <strong>" + escapeHtml(label) + "</strong> mulai " + first.mulai + " – " + escapeHtml(first.mapel);
+          el.statusNext.innerHTML = T("status.nextDay", { label: escapeHtml(label), time: first.mulai, subject: escapeHtml(first.mapel) });
         }
         return;
       }
@@ -1252,7 +1267,7 @@
     hariAktif.forEach(function (d) {
       var b = document.createElement("button");
       b.type = "button"; b.className = "chip" + (d === hariDipilih ? " is-active" : "");
-      b.textContent = NAMA_HARI[d];
+      b.textContent = dayLabel(d);
       b.onclick = function () {
         hariDipilih = d; renderTabHari(); renderJadwalHari();
       };
@@ -1266,7 +1281,7 @@
     var jadwalHari = JADWAL[hariDipilih] || [];
     el.daftarJadwal.innerHTML = "";
 
-    if(jadwalHari.length === 0) {
+    if (jadwalHari.length === 0) {
       if (el.jadwalKosong) el.jadwalKosong.hidden = false;
       el.daftarJadwal.hidden = true;
     } else {
@@ -1295,20 +1310,20 @@
         li.appendChild(jam); li.appendChild(waktu); li.appendChild(mapel);
         if (isNow) {
           var tag = document.createElement("span");
-          tag.className = "schedule-now-tag"; tag.textContent = "Sekarang";
+          tag.className = "schedule-now-tag"; tag.textContent = T("sched.now");
           li.appendChild(tag);
         }
 
+        /* Long-press (1s) opens the per-row action sheet */
         var pressTimer = null;
         function startPress() {
           clearTimeout(pressTimer);
           pressTimer = setTimeout(function () {
             selectedScheduleIndex = index;
-            if ('vibrate' in navigator) navigator.vibrate(80);
+            if ("vibrate" in navigator) navigator.vibrate(80);
             if (el.modalAksiJadwal) el.modalAksiJadwal.hidden = false;
           }, 1000);
         }
-
         function cancelPress() { clearTimeout(pressTimer); }
 
         li.addEventListener("touchstart", startPress, { passive: true });
@@ -1323,7 +1338,7 @@
       });
     }
   }
-  
+
   function cariDeadline(mapel) {
     var n = nowWIB();
     for (var add = 0; add <= 7; add++) {
@@ -1341,8 +1356,8 @@
 
         var selisihMenit = add * 24 * 60 + (menitSlot - n.totalMenit);
         var selisihJam = selisihMenit / 60;
-        var label = add === 0 ? "Hari Ini" : (add === 1 ? "Besok" : "Hari " + NAMA_HARI[dayIndex]);
-        return { ada: true, hariIndex: dayIndex, hari: NAMA_HARI[dayIndex], mulai: s.mulai, jamKe: s.jamKe, selisihJam: selisihJam, selisihMenit: selisihMenit, label: label };
+        var label = add === 0 ? T("deadline.today") : (add === 1 ? T("deadline.tomorrow") : T("deadline.on", { day: dayLabel(dayIndex) }));
+        return { ada: true, hariIndex: dayIndex, hari: dayLabel(dayIndex), mulai: s.mulai, jamKe: s.jamKe, selisihJam: selisihJam, selisihMenit: selisihMenit, label: label };
       }
     }
     return { ada: false };
@@ -1354,7 +1369,7 @@
 
   function renderTugas() {
     if (!el.daftarTugas) return;
-    var frag = document.createDocumentFragment();    
+    var frag = document.createDocumentFragment();
     var terlihat = tugasList.filter(function (t) {
       if (filterAktif === "aktif" && t.completed) return false;
       if (filterAktif === "selesai" && !t.completed) return false;
@@ -1362,7 +1377,7 @@
       if (cariTugas && (t.mapel + " " + t.detail).toLowerCase().indexOf(cariTugas) === -1) return false;
       return true;
     });
-        terlihat.sort(function (a, b) {
+    terlihat.sort(function (a, b) {
       if (a.completed !== b.completed) return a.completed ? 1 : -1;
       var da = cariDeadline(a.mapel); var db = cariDeadline(b.mapel);
       var va = da.ada ? da.selisihMenit : Infinity; var vb = db.ada ? db.selisihMenit : Infinity;
@@ -1376,7 +1391,7 @@
     if (el.tugasKosong) el.tugasKosong.hidden = terlihat.length !== 0;
     var aktif = tugasList.filter(function (t) { return !t.completed; }).length;
     var total = tugasList.length;
-    if (el.ringkasan) el.ringkasan.textContent = total === 0 ? "Belum ada tugas" : (aktif + " tugas aktif dari " + total + " total");
+    if (el.ringkasan) el.ringkasan.textContent = total === 0 ? T("tasks.empty") : T("tasks.count", { active: aktif, total: total });
   }
 
   function isiFilterMapel() {
@@ -1386,7 +1401,7 @@
     tugasList.forEach(function (t) {
       if (unik.indexOf(t.mapel) === -1) unik.push(t.mapel);
     });
-    el.filterMapel.innerHTML = '<option value="semua">— Semua mapel —</option>';
+    el.filterMapel.innerHTML = '<option value="semua">' + T("tasks.allSubjects") + "</option>";
     unik.sort().forEach(function (m) {
       var o = document.createElement("option");
       o.value = m; o.textContent = m;
@@ -1395,8 +1410,8 @@
     el.filterMapel.value = (unik.indexOf(sekarang) !== -1 || sekarang === "semua") ? sekarang : "semua";
     filterMapel = el.filterMapel.value;
   }
-  
-    function buatItemTugas(t) {
+
+  function buatItemTugas(t) {
     var li = document.createElement("li"); li.className = "task-item";
     var dl = cariDeadline(t.mapel);
     var urgent = !t.completed && dl.ada && dl.selisihJam <= 24;
@@ -1410,12 +1425,12 @@
     check.onclick = function () {
       if (!t.completed && t.berulang === "mingguan") {
         t.dibuat = Date.now();
-        showToast("Tugas mingguan direset — deadline pindah ke pekan berikutnya.");
+        showToast(T("task.weeklyReset"));
       } else {
         t.completed = !t.completed;
       }
       simpanTugas(); renderTugas(); cekNotifikasi();
-      if ('vibrate' in navigator) navigator.vibrate(50);
+      if ("vibrate" in navigator) navigator.vibrate(50);
     };
 
     var body = document.createElement("div"); body.className = "task-body";
@@ -1425,36 +1440,36 @@
 
     var meta = document.createElement("div"); meta.className = "task-meta";
     if (t.completed) {
-      meta.innerHTML = '<span class="tag tag-done">Selesai</span>';
+      meta.innerHTML = '<span class="tag tag-done">' + T("task.done") + "</span>";
     } else if (dl.ada) {
       var tagDl = document.createElement("span");
       tagDl.className = "tag tag-deadline";
-      tagDl.textContent = dl.label + " · " + dl.mulai + (dl.jamKe ? " (Jam ke-" + dl.jamKe + ")" : "");
+      tagDl.textContent = dl.label + " · " + dl.mulai + (dl.jamKe ? " (" + T("status.period", { n: dl.jamKe }) + ")" : "");
       meta.appendChild(tagDl);
       if (t.berulang === "mingguan") {
         var tagR = document.createElement("span");
         tagR.className = "tag tag-repeat";
-        tagR.textContent = "⟳ Mingguan";
+        tagR.textContent = T("task.weekly");
         meta.appendChild(tagR);
       }
       if (urgent) {
         var tagUrgent = document.createElement("span");
         tagUrgent.className = "tag tag-urgent";
-        tagUrgent.textContent = "< 24 jam — segera!";
+        tagUrgent.textContent = T("task.urgent");
         meta.appendChild(tagUrgent);
       }
     } else {
       var tagNone = document.createElement("span");
       tagNone.className = "tag";
-      tagNone.textContent = "Deadline tidak ditemukan";
+      tagNone.textContent = T("task.deadlineNone");
       meta.appendChild(tagNone);
     }
 
     body.appendChild(mapel); body.appendChild(detail); body.appendChild(meta);
-    var del = document.createElement("button"); del.className = "task-delete"; del.textContent = "Hapus";
+    var del = document.createElement("button"); del.className = "task-delete"; del.textContent = T("task.delete");
     del.onclick = function () {
       tugasList = tugasList.filter(function (x) { return x.id !== t.id; });
-      simpanTugas(); renderTugas(); cekNotifikasi(); showToast("Tugas dihapus.");
+      simpanTugas(); renderTugas(); cekNotifikasi(); showToast(T("task.deletedToast"));
     };
 
     li.appendChild(check); li.appendChild(body); li.appendChild(del);
@@ -1467,8 +1482,8 @@
     if (el.inputMapel) el.inputMapel.value = t.mapel;
     if (el.inputDetail) el.inputDetail.value = t.detail;
     if (el.inputBerulang) el.inputBerulang.value = t.berulang || "tidak";
-    if (el.modalTitle) el.modalTitle.textContent = "Edit Tugas";
-    if (el.btnSubmitTugas) el.btnSubmitTugas.textContent = "Simpan Perubahan";
+    if (el.modalTitle) el.modalTitle.textContent = T("form.editTask");
+    if (el.btnSubmitTugas) el.btnSubmitTugas.textContent = T("form.update");
     updatePreviewDeadline();
     if (el.formError) el.formError.hidden = true;
     if (el.overlay) el.overlay.hidden = false;
@@ -1484,8 +1499,8 @@
     });
     if (berubah) { simpanTugas(); renderTugas(); cekNotifikasi(); }
   }
-  
-  
+
+
   function cekNotifikasi() {
     if (!el.banner) return;
     var urgent = [];
@@ -1502,9 +1517,9 @@
 
     el.banner.hidden = false;
     if (urgent.length === 1) {
-      if (el.bannerTeks) el.bannerTeks.textContent = urgent[0].tugas.mapel + " (" + urgent[0].tugas.detail + ") — mapel dimulai " + urgent[0].dl.label.toLowerCase() + " pukul " + urgent[0].dl.mulai + ".";
+      if (el.bannerTeks) el.bannerTeks.textContent = T("banner.urgent.single", { subject: urgent[0].tugas.mapel, detail: urgent[0].tugas.detail, label: urgent[0].dl.label.toLowerCase(), time: urgent[0].dl.mulai });
     } else {
-      if (el.bannerTeks) el.bannerTeks.textContent = urgent.length + " tugas memiliki mapel yang dimulai dalam 24 jam ke depan.";
+      if (el.bannerTeks) el.bannerTeks.textContent = T("banner.urgent.multi", { n: urgent.length });
     }
     updateNotificationButton();
 
@@ -1520,15 +1535,15 @@
         var dedupKey = "yourtask-notified-" + item.tugas.id;
         if (sessionStorage.getItem(dedupKey)) continue;
 
-        await reg.showNotification("⏰ Deadline tugas mendekat", {
-          body: item.tugas.mapel + " (" + item.tugas.detail + ") — dimulai " + item.dl.label.toLowerCase() + " pukul " + item.dl.mulai + ".",
+        await reg.showNotification(T("notif.title"), {
+          body: T("notif.body", { subject: item.tugas.mapel, detail: item.tugas.detail, label: item.dl.label.toLowerCase(), time: item.dl.mulai }),
           icon: new URL("icon.png", reg.scope).href,
           tag: "yourtask-" + item.tugas.id
         });
         sessionStorage.setItem(dedupKey, "1");
       }
     } catch (e) {
-      console.error("Gagal menampilkan notifikasi:", e);
+      console.error("Failed to show notification:", e);
     }
   }
 
@@ -1537,21 +1552,21 @@
     var mapelSet = new Set();
     for (var h in JADWAL) {
       if (JADWAL[h]) {
-        JADWAL[h].forEach(function(s) {
-if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.test(s.mapel)) {
+        JADWAL[h].forEach(function (s) {
+          if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.test(s.mapel)) {
             mapelSet.add(s.mapel.trim());
           }
         });
       }
     }
 
-    el.inputMapel.innerHTML = '<option value="">— Pilih mata pelajaran —</option>';
+    el.inputMapel.innerHTML = '<option value="">' + T("form.pickSubject") + "</option>";
     var mapelArray = Array.from(mapelSet).sort();
 
     if (mapelArray.length === 0) {
       var opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "Belum ada jadwal pelajaran (Tambahkan dulu)";
+      opt.textContent = T("form.noSubjects");
       opt.disabled = true;
       el.inputMapel.appendChild(opt);
     } else {
@@ -1567,13 +1582,13 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
   function updatePreviewDeadline() {
     if (!el.inputMapel || !el.previewDeadline) return;
     var mapel = el.inputMapel.value;
-    if (!mapel) { el.previewDeadline.classList.remove("is-filled"); el.previewDeadline.textContent = "Pilih mapel untuk melihat deadline."; return; }
+    if (!mapel) { el.previewDeadline.classList.remove("is-filled"); el.previewDeadline.textContent = T("form.deadlinePreview"); return; }
     var dl = cariDeadline(mapel);
     el.previewDeadline.classList.add("is-filled");
-    if (!dl.ada) { el.previewDeadline.innerHTML = "Mapel <strong>" + escapeHtml(mapel) + "</strong> tidak ada di jadwal terdekat."; return; }
-    el.previewDeadline.innerHTML = "Deadline: <strong>" + escapeHtml(dl.label) + "</strong>, pukul " + dl.mulai + (dl.jamKe ? " (Jam ke-" + dl.jamKe + ")" : "");
+    if (!dl.ada) { el.previewDeadline.innerHTML = T("form.deadlineMissing", { subject: escapeHtml(mapel) }); return; }
+    el.previewDeadline.innerHTML = T("form.deadlineFound", { label: escapeHtml(dl.label), time: dl.mulai, period: dl.jamKe ? " (" + T("status.period", { n: dl.jamKe }) + ")" : "" });
   }
-  
+
   function showToast(msg) {
     if (!el.toast) return;
     el.toast.textContent = msg; el.toast.hidden = false;
@@ -1590,21 +1605,21 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
   }
 
   async function mintaIzinNotifikasi() {
-    if (!("Notification" in window)) { showToast("Browser tidak mendukung notifikasi."); return; }
+    if (!("Notification" in window)) { showToast(T("notif.unsupported")); return; }
     try {
       var hasil = await Notification.requestPermission();
       if (hasil === "granted") {
         notifDiizinkan = true;
         updateNotificationButton();
-        showToast("Notifikasi aktif.");
+        showToast(T("notif.granted"));
         registerPeriodicSync();
         cekNotifikasi();
       } else {
-        showToast("Izin notifikasi ditolak.");
+        showToast(T("notif.denied"));
       }
     } catch (e) {
       console.error("Permission error:", e);
-      showToast("Gagal mengaktifkan notifikasi.");
+      showToast(T("notif.failed"));
     }
   }
 
@@ -1612,25 +1627,25 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     try {
       var reg = await navigator.serviceWorker.ready;
       if (!("periodicSync" in reg)) {
-        console.warn("Periodic Background Sync tidak didukung browser ini.");
+        console.warn("Periodic Background Sync is not supported by this browser.");
         return;
       }
       var status = await navigator.permissions.query({ name: "periodic-background-sync" });
       if (status.state !== "granted") {
-        console.warn("Periodic Background Sync belum diizinkan (PWA harus di-install ke Home Screen).");
+        console.warn("Periodic Background Sync not permitted (the PWA must be installed to the Home Screen).");
         return;
       }
       await reg.periodicSync.register("deadline-check", { minInterval: 15 * 60 * 1000 });
-      console.log("Background deadline check aktif.");
+      console.log("Background deadline check active.");
     } catch (e) {
-      console.warn("Gagal daftar periodic sync:", e);
+      console.warn("Failed to register periodic sync:", e);
     }
   }
-  
+
   async function init() {
     grab();
-    mulaiAlat(); /* tombol Alat di samping + Tambah (el sudah terisi di sini) */
-    /* Peringatan bila konteks tidak aman (HTTP): enkripsi & SW terbatas */
+    mulaiAlat(); /* the Tools button beside + Add (el is already populated here) */
+    /* Warn when the context is insecure (HTTP): encryption & SW are limited */
     var banInsecure = document.getElementById("banner-insecure");
     if (banInsecure) banInsecure.hidden = (window.isSecureContext !== false);
     await muatProfil();
@@ -1638,11 +1653,11 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     await muatTugas();
     await muatTema();
     mulaiTemaUI();
-    muatOffsetWaktu().then(ambilWaktuServer); /* kompensasi jam perangkat */
+    muatOffsetWaktu().then(ambilWaktuServer); /* compensate the device clock */
     mirrorStateToIDB();
     terapkanLabelZona();
-    
-    /* jamKe tidak lagi wajib di HTML — divalidasi manual per tipe */
+
+    /* jamKe is no longer required in the HTML — validated manually per type */
     if (el.inputJadwalJamKe) el.inputJadwalJamKe.required = false;
     if (el.inputEditJamKe) el.inputEditJamKe.required = false;
 
@@ -1651,15 +1666,15 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     var btnHapusJadwal = document.getElementById("btn-hapus-jadwal");
     if (btnHapusJadwal) {
       btnHapusJadwal.addEventListener("click", function () {
-        if (!confirm("HAPUS SEMUA JADWAL di semua hari? Tugas tidak ikut terhapus. Lanjutkan?")) return;
+        if (!confirm(T("sched.deleteAllConfirm"))) return;
         JADWAL = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
         simpanJadwal(); mirrorStateToIDB();
-        isiDropdownMapel(); renderJadwalHari(); updateStatusKBM();
+        isiDropdownMapel(); renderJadwalHari(); updateClassStatus();
         if (el.modalProfil) el.modalProfil.hidden = true;
-        showToast("Semua data jadwal dihapus.");
+        showToast(T("sched.deleteAllDone"));
       });
     }
-    
+
 
     var n = nowWIB();
     hariDipilih = (JADWAL[n.dayIndex] && JADWAL[n.dayIndex].length > 0) ? n.dayIndex : 1;
@@ -1674,17 +1689,17 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
 
     var qs = new URLSearchParams(location.search);
     if (qs.get("action") === "tambah-tugas" && el.btnBuka) el.btnBuka.click();
-    
+
     isiDropdownMapel();
     tickJam();
-    updateStatusKBM();
+    updateClassStatus();
     renderTugas();
     renderTabHari();
     renderJadwalHari();
     cekNotifikasi();
 
     if (el.btnEditUser) {
-      el.btnEditUser.addEventListener("click", function() {
+      el.btnEditUser.addEventListener("click", function () {
         if (el.inputUsername) el.inputUsername.value = currentUsername;
         if (el.inputSekolah) el.inputSekolah.value = currentSchool;
         var selTZ = document.getElementById("input-timezone");
@@ -1694,27 +1709,27 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     }
 
     var btnTutupProfil = document.getElementById("btn-tutup-profil");
-    if (btnTutupProfil) btnTutupProfil.addEventListener("click", function() { if (el.modalProfil) el.modalProfil.hidden = true; });
+    if (btnTutupProfil) btnTutupProfil.addEventListener("click", function () { if (el.modalProfil) el.modalProfil.hidden = true; });
 
     var btnBatalProfil = document.getElementById("btn-batal-profil");
-    if (btnBatalProfil) btnBatalProfil.addEventListener("click", function() { if (el.modalProfil) el.modalProfil.hidden = true; });
+    if (btnBatalProfil) btnBatalProfil.addEventListener("click", function () { if (el.modalProfil) el.modalProfil.hidden = true; });
 
     if (el.formProfil) {
-      el.formProfil.addEventListener("submit", function(e) {
+      el.formProfil.addEventListener("submit", function (e) {
         e.preventDefault();
         var valUser = el.inputUsername ? el.inputUsername.value.trim() : "";
         var valSchool = el.inputSekolah ? el.inputSekolah.value.trim() : "";
-        if(valUser) { currentUsername = valUser; encPut("username", currentUsername); if (el.displayUser) el.displayUser.textContent = currentUsername; }
-        if(valSchool) { currentSchool = valSchool; encPut("school", currentSchool); if (el.displaySekolah) el.displaySekolah.textContent = currentSchool; }
+        if (valUser) { currentUsername = valUser; encPut("username", currentUsername); if (el.displayUser) el.displayUser.textContent = currentUsername; }
+        if (valSchool) { currentSchool = valSchool; encPut("school", currentSchool); if (el.displaySekolah) el.displaySekolah.textContent = currentSchool; }
         var selTZ = document.getElementById("input-timezone");
         if (selTZ) {
           currentTZ = (selTZ.value === TZ_AUTO) ? deteksiZona() : selTZ.value;
           encPut("timezone", currentTZ);
           terapkanLabelZona();
-          tickJam(); updateStatusKBM(); renderJadwalHari();
+          tickJam(); updateClassStatus(); renderJadwalHari();
         }
         if (el.modalProfil) el.modalProfil.hidden = true;
-        showToast("Profil berhasil diperbarui!");
+        showToast(T("prof.saved"));
       });
     }
 
@@ -1730,7 +1745,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     if (el.btnTambahJadwal) el.btnTambahJadwal.addEventListener("click", bukaModalTambah);
 
     if (el.inputJadwalHari) {
-      el.inputJadwalHari.addEventListener("change", function() {
+      el.inputJadwalHari.addEventListener("change", function () {
         var hariVal = parseInt(this.value, 10);
         var tipeSekarang = el.inputJadwalTipe ? el.inputJadwalTipe.value : "pelajaran";
         populateJamKeOptions(el.inputJadwalJamKe, hariVal, null, tipeSekarang !== "pelajaran");
@@ -1738,20 +1753,20 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     }
 
     if (el.inputJadwalTipe) {
-      el.inputJadwalTipe.addEventListener("change", function() {
+      el.inputJadwalTipe.addEventListener("change", function () {
         var hariVal = el.inputJadwalHari ? parseInt(el.inputJadwalHari.value, 10) : 1;
         populateJamKeOptions(el.inputJadwalJamKe, hariVal, null, this.value !== "pelajaran");
       });
     }
 
     var btnTutupJadwal = document.getElementById("btn-tutup-jadwal");
-    if (btnTutupJadwal) btnTutupJadwal.addEventListener("click", function() { if (el.modalJadwal) el.modalJadwal.hidden = true; });
+    if (btnTutupJadwal) btnTutupJadwal.addEventListener("click", function () { if (el.modalJadwal) el.modalJadwal.hidden = true; });
 
     var btnBatalJadwal = document.getElementById("btn-batal-jadwal");
-    if (btnBatalJadwal) btnBatalJadwal.addEventListener("click", function() { if (el.modalJadwal) el.modalJadwal.hidden = true; });
+    if (btnBatalJadwal) btnBatalJadwal.addEventListener("click", function () { if (el.modalJadwal) el.modalJadwal.hidden = true; });
 
     if (el.formJadwal) {
-      el.formJadwal.addEventListener("submit", function(e) {
+      el.formJadwal.addEventListener("submit", function (e) {
         e.preventDefault();
         var h = el.inputJadwalHari ? parseInt(el.inputJadwalHari.value, 10) : 1;
         var mulai = el.formJadwal.querySelector("#input-jadwal-mulai").value;
@@ -1760,18 +1775,18 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         var tipe = el.formJadwal.querySelector("#input-jadwal-tipe").value;
         var jamKe = el.inputJadwalJamKe ? el.inputJadwalJamKe.value : "";
 
-        if(jamKeMenit(mulai) >= jamKeMenit(selesai)) { showToast("Waktu mulai harus lebih awal!"); return; }
+        if (jamKeMenit(mulai) >= jamKeMenit(selesai)) { showToast(T("sched.timeOrder")); return; }
         var bentrok = adaTabrakanJadwal(JADWAL[h] || [], mulai, selesai, null);
-        if (bentrok) { showToast("Bentrok dengan \"" + bentrok.mapel + "\" (" + bentrok.mulai + "\u2013" + bentrok.selesai + "). Pilih jam lain."); return; }
+        if (bentrok) { showToast(T("sched.conflict", { subject: bentrok.mapel, a: bentrok.mulai, b: bentrok.selesai })); return; }
 
         var jkNum = parseInt(jamKe, 10);
         if (tipe === "pelajaran") {
-          if(!jamKe || jkNum <= 0) { showToast("Jam ke- wajib dipilih untuk pelajaran!"); return; }
+          if (!jamKe || jkNum <= 0) { showToast(T("sched.periodRequired")); return; }
           var duplikat = false;
           (JADWAL[h] || []).forEach(function (x) {
             if (x.tipe === "pelajaran" && String(parseInt(x.jamKe, 10)) === String(jkNum)) duplikat = true;
           });
-          if (duplikat) { showToast("Jam ke-" + jkNum + " sudah dipakai di hari itu!"); return; }
+          if (duplikat) { showToast(T("sched.periodTaken", { n: jkNum })); return; }
         }
 
         if (!JADWAL[h]) JADWAL[h] = [];
@@ -1783,16 +1798,16 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         if (el.modalJadwal) el.modalJadwal.hidden = true;
         isiDropdownMapel();
         renderJadwalHari();
-        updateStatusKBM();
-        showToast("Jadwal ditambahkan.");
+        updateClassStatus();
+        showToast(T("sched.added"));
       });
     }
-    
+
     var btnTutupAksi = document.getElementById("btn-tutup-aksi");
-    if (btnTutupAksi) btnTutupAksi.addEventListener("click", function() { if (el.modalAksiJadwal) el.modalAksiJadwal.hidden = true; });
+    if (btnTutupAksi) btnTutupAksi.addEventListener("click", function () { if (el.modalAksiJadwal) el.modalAksiJadwal.hidden = true; });
 
     if (el.btnAksiEdit) {
-      el.btnAksiEdit.addEventListener("click", function() {
+      el.btnAksiEdit.addEventListener("click", function () {
         if (el.modalAksiJadwal) el.modalAksiJadwal.hidden = true;
         if (selectedScheduleIndex === null || !JADWAL[hariDipilih]) return;
         var s = JADWAL[hariDipilih][selectedScheduleIndex];
@@ -1810,36 +1825,36 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     }
 
     if (el.btnAksiHapus) {
-      el.btnAksiHapus.addEventListener("click", function() {
+      el.btnAksiHapus.addEventListener("click", function () {
         if (el.modalAksiJadwal) el.modalAksiJadwal.hidden = true;
         if (selectedScheduleIndex === null || !JADWAL[hariDipilih]) return;
 
-        if (confirm("Yakin ingin menghapus jadwal ini?")) {
+        if (confirm(T("sched.deleteConfirm"))) {
           JADWAL[hariDipilih].splice(selectedScheduleIndex, 1);
           simpanJadwal();
           isiDropdownMapel();
           renderJadwalHari();
-          updateStatusKBM();
-          showToast("Jadwal dihapus.");
+          updateClassStatus();
+          showToast(T("sched.deleted"));
         }
         selectedScheduleIndex = null;
       });
     }
 
     var btnTutupEditJadwal = document.getElementById("btn-tutup-edit-jadwal");
-    if (btnTutupEditJadwal) btnTutupEditJadwal.addEventListener("click", function() { if (el.modalEditJadwal) el.modalEditJadwal.hidden = true; selectedScheduleIndex = null; });
+    if (btnTutupEditJadwal) btnTutupEditJadwal.addEventListener("click", function () { if (el.modalEditJadwal) el.modalEditJadwal.hidden = true; selectedScheduleIndex = null; });
 
     var btnBatalEditJadwal = document.getElementById("btn-batal-edit-jadwal");
-    if (btnBatalEditJadwal) btnBatalEditJadwal.addEventListener("click", function() { if (el.modalEditJadwal) el.modalEditJadwal.hidden = true; selectedScheduleIndex = null; });
+    if (btnBatalEditJadwal) btnBatalEditJadwal.addEventListener("click", function () { if (el.modalEditJadwal) el.modalEditJadwal.hidden = true; selectedScheduleIndex = null; });
 
     if (el.inputEditTipe) {
-      el.inputEditTipe.addEventListener("change", function() {
+      el.inputEditTipe.addEventListener("change", function () {
         populateJamKeOptions(el.inputEditJamKe, hariDipilih, null, this.value !== "pelajaran");
       });
     }
 
     if (el.formEditJadwal) {
-      el.formEditJadwal.addEventListener("submit", function(e) {
+      el.formEditJadwal.addEventListener("submit", function (e) {
         e.preventDefault();
         if (selectedScheduleIndex === null || !JADWAL[hariDipilih]) return;
 
@@ -1849,18 +1864,18 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         var tipe = el.formEditJadwal.querySelector("#input-edit-tipe").value;
         var jamKe = el.inputEditJamKe ? el.inputEditJamKe.value : "";
 
-        if(jamKeMenit(mulai) >= jamKeMenit(selesai)) { showToast("Waktu mulai harus lebih awal!"); return; }
+        if (jamKeMenit(mulai) >= jamKeMenit(selesai)) { showToast(T("sched.timeOrder")); return; }
         var bentrok = adaTabrakanJadwal(JADWAL[hariDipilih] || [], mulai, selesai, selectedScheduleIndex);
-        if (bentrok) { showToast("Bentrok dengan \"" + bentrok.mapel + "\" (" + bentrok.mulai + "\u2013" + bentrok.selesai + "). Pilih jam lain."); return; }
+        if (bentrok) { showToast(T("sched.conflict", { subject: bentrok.mapel, a: bentrok.mulai, b: bentrok.selesai })); return; }
 
         var jkNum = parseInt(jamKe, 10);
         if (tipe === "pelajaran") {
-          if(!jamKe || jkNum <= 0) { showToast("Jam ke- wajib dipilih untuk pelajaran!"); return; }
+          if (!jamKe || jkNum <= 0) { showToast(T("sched.periodRequired")); return; }
           var duplikat = false;
           JADWAL[hariDipilih].forEach(function (x, idx) {
             if (idx !== selectedScheduleIndex && x.tipe === "pelajaran" && String(parseInt(x.jamKe, 10)) === String(jkNum)) duplikat = true;
           });
-          if (duplikat) { showToast("Jam ke-" + jkNum + " sudah dipakai di hari itu!"); return; }
+          if (duplikat) { showToast(T("sched.periodTaken", { n: jkNum })); return; }
         }
 
         JADWAL[hariDipilih][selectedScheduleIndex] = {
@@ -1873,29 +1888,29 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         selectedScheduleIndex = null;
         isiDropdownMapel();
         renderJadwalHari();
-        updateStatusKBM();
-        showToast("Jadwal diperbarui.");
+        updateClassStatus();
+        showToast(T("sched.updated"));
       });
     }
 
-        if (el.btnBuka) {
-      el.btnBuka.addEventListener("click", function() {
+    if (el.btnBuka) {
+      el.btnBuka.addEventListener("click", function () {
         if (el.form) el.form.reset();
         editTaskId = null;
-        if (el.modalTitle) el.modalTitle.textContent = "Tambah Tugas";
-        if (el.btnSubmitTugas) el.btnSubmitTugas.textContent = "Simpan Tugas";
+        if (el.modalTitle) el.modalTitle.textContent = T("form.addTask");
+        if (el.btnSubmitTugas) el.btnSubmitTugas.textContent = T("form.save");
         if (el.formError) el.formError.hidden = true;
         isiDropdownMapel();
         updatePreviewDeadline();
         if (el.overlay) el.overlay.hidden = false;
       });
-        }
-    
+    }
+
     var btnTutupModal = document.getElementById("btn-tutup-modal");
-    if (btnTutupModal) btnTutupModal.addEventListener("click", function() { if (el.overlay) el.overlay.hidden = true; });
+    if (btnTutupModal) btnTutupModal.addEventListener("click", function () { if (el.overlay) el.overlay.hidden = true; });
 
     var btnBatal = document.getElementById("btn-batal");
-    if (btnBatal) btnBatal.addEventListener("click", function() { if (el.overlay) el.overlay.hidden = true; });
+    if (btnBatal) btnBatal.addEventListener("click", function () { if (el.overlay) el.overlay.hidden = true; });
 
     if (el.inputMapel) {
       el.inputMapel.addEventListener("change", function () {
@@ -1912,7 +1927,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         var berulang = el.inputBerulang ? el.inputBerulang.value : "tidak";
         if (!mapel || !detail) {
           if (el.formError) {
-            el.formError.textContent = "Mohon lengkapi formulir.";
+            el.formError.textContent = T("form.errFill");
             el.formError.hidden = false;
           }
           return;
@@ -1921,12 +1936,12 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
           var tg = tugasList.find(function (x) { return x.id === editTaskId; });
           if (tg) { tg.mapel = mapel; tg.detail = detail; tg.berulang = berulang; }
           editTaskId = null;
-          if (el.modalTitle) el.modalTitle.textContent = "Tambah Tugas";
-          if (el.btnSubmitTugas) el.btnSubmitTugas.textContent = "Simpan Tugas";
-          showToast("Tugas diperbarui.");
+          if (el.modalTitle) el.modalTitle.textContent = T("form.addTask");
+          if (el.btnSubmitTugas) el.btnSubmitTugas.textContent = T("form.save");
+          showToast(T("form.taskUpdated"));
         } else {
           tugasList.push({ id: "t" + Date.now(), mapel: mapel, detail: detail, completed: false, dibuat: Date.now(), berulang: berulang });
-          showToast("Tugas dicatat.");
+          showToast(T("form.taskAdded"));
         }
         simpanTugas(); renderTugas(); cekNotifikasi();
         if (el.overlay) el.overlay.hidden = true;
@@ -1945,7 +1960,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         c.classList.add("is-active"); filterAktif = c.dataset.filter; renderTugas();
       });
     });
-    
+
     isiFilterMapel();
     if (el.filterMapel) {
       el.filterMapel.addEventListener("change", function () { filterMapel = el.filterMapel.value; renderTugas(); });
@@ -1956,25 +1971,39 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         renderTugas();
       });
     }
-    
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').then(function (reg) {
-        reg.addEventListener('updatefound', function () {
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").then(function (reg) {
+        reg.addEventListener("updatefound", function () {
           var nw = reg.installing;
           if (!nw) return;
-          nw.addEventListener('statechange', function () {
-            if (nw.state === 'activated' && navigator.serviceWorker.controller) {
-              showToast('Versi baru tersedia — muat ulang halaman untuk memakainya.');
+          nw.addEventListener("statechange", function () {
+            if (nw.state === "activated" && navigator.serviceWorker.controller) {
+              showToast(T("misc.newVersion"));
             }
           });
         });
       }).catch(function () {});
     }
 
+    /* Re-render every dynamic, language-dependent surface when the language changes */
+    if (window.I18N) {
+      document.addEventListener("langchange", function () {
+        terapkanLabelZona();
+        tickJam();
+        updateClassStatus();
+        renderTugas();
+        renderTabHari();
+        renderJadwalHari();
+        renderTemaPresets();
+        isiFilterMapel();
+      });
+    }
+
     setInterval(tickJam, 1000);
-    setInterval(function () { updateStatusKBM(); if (hariDipilih === nowWIB().dayIndex) renderJadwalHari(); }, 15000);
+    setInterval(function () { updateClassStatus(); if (hariDipilih === nowWIB().dayIndex) renderJadwalHari(); }, 15000);
     setInterval(function () { bersihkanTugasHarian(); renderTugas(); cekNotifikasi(); }, 60000);
-    setInterval(ambilWaktuServer, 6 * 60 * 60 * 1000); /* validasi ulang offset tiap 6 jam */
+    setInterval(ambilWaktuServer, 6 * 60 * 60 * 1000); /* re-validate the offset every 6 hours */
   }
 
   if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", start); } else { start(); }
@@ -1983,18 +2012,18 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       .then(function () { return muatHariAktif(); })
       .then(function () { return init(); })
       .catch(function (e) {
-        console.error("Gagal memuat data tersimpan:", e);
+        console.error("Failed to load saved data:", e);
         return init();
       });
   }
-  
-  /* ====== ALAT JADWAL + HARI SEKOLAH AKTIF + AI PDF ====== */
+
+  /* ====== SCHEDULE TOOLS + ACTIVE SCHOOL DAYS + AI PDF ====== */
 
   function muatHariAktif() {
     return encGet("activeDays").then(function (arr) {
       if (Array.isArray(arr)) {
         var bersih = arr.filter(function (d) { return d >= 0 && d <= 6; })
-                        .sort(function (a, b) { return a - b; });
+          .sort(function (a, b) { return a - b; });
         if (bersih.length > 0) hariAktif = bersih;
       }
     }).catch(function () {}).then(function () {
@@ -2010,17 +2039,30 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     selectedScheduleIndex = null;
     renderTabHari();
     renderJadwalHari();
-    updateStatusKBM();
+    updateClassStatus();
     renderTugas();
     cekNotifikasi();
   }
-  var ALAT_DAY_RE = /(senin|selasa|rabu|kamis|jum[''’]?at|sabtu|minggu)/i;
-  var ALAT_TIME_RE = /(\d{1,2})\s*[.:]\s*(\d{2})\s*(?:s\s*\/\s*d|s\.?\s*d\.?|sd|sampai|hingga|[-–—])?\s*(\d{1,2})\s*[.:]\s*(\d{2})/i;
+
+  /* Day-name recognition across many languages: pasted text or AI output may
+     use English, Indonesian, Spanish/French/German/Italian, Russian, CJK. */
+  var ALAT_DAY_WORDS = {
+    "sunday": 0, "sun": 0, "minggu": 0, "ahad": 0,
+    "monday": 1, "mon": 1, "senin": 1, "lunes": 1, "lundi": 1, "montag": 1, "luned\u00ec": 1, "\u661f\u671f\u4e00": 1, "\u6708\u66dc\u65e5": 1, "\u6708\u66dc": 1, "\uc6d4\uc694\uc77c": 1, "\u043f\u043e\u043d\u0435\u0434\u0435\u043b\u044c\u043d\u0438\u043a": 1,
+    "tuesday": 2, "tue": 2, "selasa": 2, "martes": 2, "mardi": 2, "dienstag": 2, "marted\u00ec": 2, "\u661f\u671f\u4e8c": 2, "\u706b\u66dc\u65e5": 2, "\u706b\u66dc": 2, "\ud654\uc694\uc77c": 2, "\u0432\u0442\u043e\u0440\u043d\u0438\u043a": 2,
+    "wednesday": 3, "wed": 3, "rabu": 3, "mi\u00e9rcoles": 3, "miercoles": 3, "mercredi": 3, "mittwoch": 3, "mercoled\u00ec": 3, "\u661f\u671f\u4e09": 3, "\u6c34\u66dc\u65e5": 3, "\u6c34\u66dc": 3, "\uc218\uc694\uc77c": 3, "\u0441\u0440\u0435\u0434\u0430": 3,
+    "thursday": 4, "thu": 4, "kamis": 4, "jueves": 4, "jeudi": 4, "donnerstag": 4, "gioved\u00ec": 4, "\u661f\u671f\u56db": 4, "\u6728\u66dc\u65e5": 4, "\u6728\u66dc": 4, "\ubaa9\uc694\uc77c": 4, "\u0447\u0435\u0442\u0432\u0435\u0440\u0433": 4,
+    "friday": 5, "fri": 5, "jumat": 5, "viernes": 5, "vendredi": 5, "freitag": 5, "venerd\u00ec": 5, "\u661f\u671f\u4e94": 5, "\u91d1\u66dc\u65e5": 5, "\u91d1\u66dc": 5, "\uae08\uc694\uc77c": 5, "\u043f\u044f\u0442\u043d\u0438\u0446\u0430": 5,
+    "saturday": 6, "sat": 6, "sabtu": 6, "s\u00e1bado": 6, "sabado": 6, "samedi": 6, "samstag": 6, "sabato": 6, "\u661f\u671f\u516d": 6, "\u571f\u66dc\u65e5": 6, "\u571f\u66dc": 6, "\ud1a0\uc694\uc77c": 6, "\u0441\u0443\u0431\u0431\u043e\u0442\u0430": 6,
+    "\u661f\u671f\u65e5": 0, "\u65e5\u66dc\u65e5": 0, "\u65e5\u66dc": 0, "\uc77c\uc694\uc77c": 0, "\u0432\u043e\u0441\u043a\u0440\u0435\u0441\u0435\u043d\u044c\u0435": 0
+  };
+  function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  var ALAT_DAY_RE = new RegExp("(" + Object.keys(ALAT_DAY_WORDS).map(escapeRe).join("|") + ")", "i");
+  var ALAT_TIME_RE = /(\d{1,2})\s*[.:]\s*(\d{2})\s*(?:s\s*\/\s*d|s\.?\s*d\.?|sd|sampai|hingga|[-\u2013\u2014])?\s*(\d{1,2})\s*[.:]\s*(\d{2})/i;
 
   function alatHariKeIndex(word) {
-    var w = String(word).toLowerCase().replace(/[''’]/g, "").trim();
-    var map = { senin: 1, selasa: 2, rabu: 3, kamis: 4, jumat: 5, sabtu: 6, minggu: 0 };
-    return map.hasOwnProperty(w) ? map[w] : -1;
+    var w = String(word).toLowerCase().replace(/['\u2019]/g, "").trim();
+    return ALAT_DAY_WORDS.hasOwnProperty(w) ? ALAT_DAY_WORDS[w] : -1;
   }
 
   function alatBersihMapel(s) {
@@ -2043,7 +2085,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       var mDay = head.slice(0, 24).match(ALAT_DAY_RE);
       if (mDay) {
         var dIdx = alatHariKeIndex(mDay[1]);
-        
+
         currentDay = dIdx;
         if (!hasil[dIdx]) hasil[dIdx] = [];
         lastEnd = null; lastDur = null; lastJamKe = 0;
@@ -2051,7 +2093,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       }
 
       if (currentDay === null && fallbackDay === null) {
-        peringatan.push("Baris " + (i + 1) + " dilewati: tidak ada header hari di atasnya.");
+        peringatan.push(T("parser.lineDay", { n: i + 1 }));
         return;
       }
       if (currentDay === null) currentDay = fallbackDay;
@@ -2064,27 +2106,27 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         var h1 = parseInt(t[1], 10), m1 = parseInt(t[2], 10);
         var h2 = parseInt(t[3], 10), m2 = parseInt(t[4], 10);
         if (h1 > 23 || m1 > 59 || m2 > 59 || (h2 > 23 && !(h2 === 24 && m2 === 0))) {
-          peringatan.push("Baris " + (i + 1) + " dilewati: jam tidak valid.");
+          peringatan.push(T("parser.lineTime", { n: i + 1 }));
           return;
         }
         mulaiM = h1 * 60 + m1;
         selesaiM = (h2 === 24) ? 1440 : h2 * 60 + m2;
         if (selesaiM <= mulaiM) {
-          peringatan.push("Baris " + (i + 1) + " dilewati: jam selesai <= jam mulai.");
+          peringatan.push(T("parser.lineOrder", { n: i + 1 }));
           return;
         }
-        var mJk = line.slice(0, t.index).match(/(\d{1,2})\s*(?:[|;.,\-–—]\s*)?$/);
+        var mJk = line.slice(0, t.index).match(/(\d{1,2})\s*(?:[|;.,\-\u2013\u2014]\s*)?$/);
         if (mJk) jamKe = parseInt(mJk[1], 10);
         sisa = line.slice(t.index + t[0].length);
       } else {
         if (lastEnd === null || lastDur === null) {
-          peringatan.push("Baris " + (i + 1) + " dilewati: tanpa jam & tanpa acuan baris sebelumnya.");
+          peringatan.push(T("parser.lineRef", { n: i + 1 }));
           return;
         }
         mulaiM = lastEnd;
         selesaiM = lastEnd + lastDur;
         if (selesaiM > 1440) {
-          peringatan.push("Baris " + (i + 1) + " dilewati: melewati 24:00.");
+          peringatan.push(T("parser.line24", { n: i + 1 }));
           return;
         }
         sisa = line;
@@ -2092,14 +2134,14 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
 
       var mapel = alatBersihMapel(sisa);
       if (mapel === "") {
-        peringatan.push("Baris " + (i + 1) + " dilewati: nama kegiatan kosong.");
+        peringatan.push(T("parser.lineEmpty", { n: i + 1 }));
         return;
       }
 
-      var tipe = /istirahat|break/i.test(mapel) ? "istirahat"
-               : (/upacara/i.test(mapel) ? "upacara" : "pelajaran");
+      var tipe = /istirahat|break|recreo|r\u00e9cr\u00e9ation|pause|recreio|\u4f11\u606f|\u4f11\u61a9|\uc27c\ub294|\u043f\u0435\u0440\u0435\u043c\u0435\u043d\u0430/i.test(mapel) ? "istirahat"
+        : (/upacara|assembly|ceremony|c\u00e9r\u00e9monie|zeremonie|\u671d\u306e\u96c6\u4f1a|\u6668\u4f1a|\uc870\ud68c|\u043b\u0438\u043d\u0435\u0439\u043a\u0430/i.test(mapel) ? "upacara" : "pelajaran");
 
-      /* Istirahat/upacara: jamKe opsional, tidak menambah urutan pelajaran */
+      /* Breaks/assemblies: optional period number, they do not advance the lesson count */
       if (tipe === "pelajaran") {
         if (jamKe === null) jamKe = lastJamKe > 0 ? lastJamKe + 1 : hasil[currentDay].length + 1;
         if (jamKe < 1 || jamKe > 100) jamKe = hasil[currentDay].length + 1;
@@ -2124,7 +2166,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       .sort(function (a, b) { return a - b; });
     return { hasil: hasil, hariAda: hariAda, peringatan: peringatan };
   }
-  
+
   function alatNormJam(v) {
     var s = String(v == null ? "" : v).trim();
     var m = s.match(/^(\d{1,2})[.:](\d{2})$/);
@@ -2146,7 +2188,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     var jadwal = (obj && obj.jadwal) ? obj.jadwal : {};
     Object.keys(jadwal).forEach(function (namaHari) {
       var dIdx = alatHariKeIndex(namaHari);
-      if (dIdx < 0) { peringatan.push('Hari "' + namaHari + '" tidak dikenal, dilewati.'); return; }
+      if (dIdx < 0) { peringatan.push(T("parser.dayUnknown", { day: namaHari })); return; }
       var rows = Array.isArray(jadwal[namaHari]) ? jadwal[namaHari] : [];
       var list = [];
       rows.forEach(function (r) {
@@ -2154,13 +2196,13 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         var mapel = String(r.mapel || "").replace(/\s+/g, " ").trim();
         if (!mapel) return;
         if (mulai === null || selesai === null || selesai <= mulai) {
-          peringatan.push(NAMA_HARI[dIdx] + ': "' + mapel + '" dilewati (jam tidak valid).');
+          peringatan.push(T("parser.skipTime", { day: dayLabel(dIdx), subject: mapel }));
           return;
         }
         var tipe = "pelajaran";
         if (r.tipe === "istirahat" || r.tipe === "upacara" || r.tipe === "pelajaran") tipe = r.tipe;
         else if (/istirahat|break/i.test(mapel)) tipe = "istirahat";
-        else if (/upacara/i.test(mapel)) tipe = "upacara";
+        else if (/upacara|assembly|ceremony/i.test(mapel)) tipe = "upacara";
 
         var jk = String(r.jam_ke == null ? "" : r.jam_ke).trim();
         if (!/^\d+$/.test(jk)) jk = "";
@@ -2169,7 +2211,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         list.push({ jamKe: jk, mulai: mulai, selesai: selesai, mapel: mapel, tipe: tipe });
       });
       if (list.length) {
-        /* pelajaran tanpa jamKe dari AI -> beri nomor urut sesuai waktu */
+        /* Lessons without a period number from the AI -> number them by time */
         var terpakai = new Set();
         list.forEach(function (r) { if (/^\d+$/.test(r.jamKe)) terpakai.add(parseInt(r.jamKe, 10)); });
         var urut = list.slice().sort(function (a, b) { return jamKeMenit(a.mulai) - jamKeMenit(b.mulai); });
@@ -2185,7 +2227,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       }
     });
     var hariAda = Object.keys(hasil).map(function (k) { return parseInt(k, 10); })
-                    .sort(function (a, b) { return a - b; });
+      .sort(function (a, b) { return a - b; });
     return { hasil: hasil, hariAda: hariAda, peringatan: peringatan };
   }
 
@@ -2196,49 +2238,49 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
   function alatScanAI(file, instruksi, apiKey, statusEl, btnAi, onOk) {
     if (!apiKey) {
       statusEl.style.color = "var(--amber-500)";
-      statusEl.textContent = "Isi API key dulu (gratis di aistudio.google.com/apikey).";
+      statusEl.textContent = T("ai.noKey");
       return;
     }
     if (!file) {
       statusEl.style.color = "var(--amber-500)";
-      statusEl.textContent = "Pilih file PDF/gambar jadwal dulu.";
+      statusEl.textContent = T("ai.noFile");
       return;
     }
-        if (file.size > 14 * 1024 * 1024) {
+    if (file.size > 14 * 1024 * 1024) {
       statusEl.style.color = "var(--amber-500)";
-      statusEl.textContent = "File kegedean (" + Math.round(file.size / 1048576) + " MB) — maks 14 MB. Kompres atau screenshot halamannya.";
+      statusEl.textContent = T("ai.tooBig", { mb: Math.round(file.size / 1048576) });
       return;
-        }
+    }
 
     btnAi.disabled = true;
     statusEl.style.color = "var(--text-muted)";
-    statusEl.textContent = "Membaca file...";
+    statusEl.textContent = T("ai.reading");
 
     var reader = new FileReader();
     reader.onerror = function () {
       btnAi.disabled = false;
-      statusEl.textContent = "Gagal membaca file.";
+      statusEl.textContent = T("ai.readFail");
     };
     reader.onload = function (ev) {
       var dataUrl = String(ev.target.result);
       var isPdf = /application\/pdf/i.test(file.type || "") || /\.pdf$/i.test(file.name || "");
       var prompt =
-        "Kamu mesin pengubah dokumen jadwal pelajaran sekolah (tabel, teks berantakan hasil ekstrak PDF, atau foto) menjadi JSON. " +
-        "Ambil jadwal dari dokumen ini. " +
-        (instruksi ? "Instruksi pengguna (WAJIB diikuti, mis. pilih kelas/fase yang disebut): " + instruksi + "\n" : "\n") +
-        "Aturan output:\n" +
-        "1. Balas HANYA JSON valid tanpa teks lain, tanpa markdown. Bentuk persis:\n" +
-        '{"jadwal":{"Senin":[{"jam_ke":"1","mulai":"07:00","selesai":"07:40","mapel":"Matematika","tipe":"pelajaran"}]},"catatan":"satu kalimat"}\n' +
-        "2. Kunci objek jadwal WAJIB ada dan berisi nama hari bahasa Indonesia: Senin, Selasa, Rabu, Kamis, Jumat, Sabtu, Minggu. Hari kosong boleh dihilangkan.\n" +
-        "3. Setiap baris WAJIB punya mulai & selesai format HH:MM (24 jam). Data berantakan WAJIB kamu rapikan.\n" +
-        "4. Jika tabel hanya berisi nomor jam (jam_ke) tanpa jam, rekonstruksi jamnya: pelajaran ke-1 mulai 07:00, tiap pelajaran 40 menit, istirahat 15 menit setelah pelajaran ke-3, urutan tidak tumpang tindih.\n" +
-        '5. Jika satu sel berisi rentang jam (contoh "07.00-07.40" atau "07:00 s.d. 07:40"), pecah jadi mulai "07:00" dan selesai "07:40".\n' +
-        '6. tipe hanya "pelajaran", "istirahat", atau "upacara". Nama mapel ditulis bersih (mis. "MTK" jadi "Matematika" bila jelas).\n' +
-        '7. jam_ke = nomor urut jam pelajaran (string); untuk istirahat/upacara boleh "".\n' +
-        "8. Teks hasil ekstrak PDF sering acak (kolom menumpuk, urutan kacau). TETAP USAHA memetakan baris-barisnya ke format di atas.\n" +
-        "9. HANYA jika benar-benar tidak ada jadwal di dokumen, balas {\"jadwal\":{},\"catatan\":\"alasan singkat\"}.\n";
+        "You are a converter that turns school class-schedule documents (tables, messy PDF-extracted text, or photos) into JSON. " +
+        "Extract the schedule from this document. " +
+        (instruksi ? "User instruction (MUST be followed, e.g. pick the mentioned class/grade): " + instruksi + "\n" : "\n") +
+        "Output rules:\n" +
+        "1. Reply with VALID JSON ONLY, no other text, no markdown. Exact shape:\n" +
+        '{"jadwal":{"Monday":[{"jam_ke":"1","mulai":"07:00","selesai":"07:40","mapel":"Mathematics","tipe":"pelajaran"}]},"catatan":"one sentence"}\n' +
+        "2. The jadwal object MUST exist and contain ENGLISH day names: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday. Empty days may be omitted.\n" +
+        "3. Every row MUST have mulai & selesai in HH:MM (24-hour) format. Clean up messy data.\n" +
+        "4. If the table only has period numbers (jam_ke) without times, reconstruct them: lesson 1 starts at 07:00, each lesson is 40 minutes, a 15-minute break after the 3rd lesson, no overlaps.\n" +
+        '5. If a cell contains a time range (e.g. "07.00-07.40" or "07:00 to 07:40"), split it into mulai "07:00" and selesai "07:40".\n' +
+        '6. tipe is only "pelajaran" (lesson), "istirahat" (break), or "upacara" (assembly). Write subject names cleanly (e.g. "MATH" becomes "Mathematics" when obvious).\n' +
+        '7. jam_ke = the lesson period number (string); for breaks/assemblies "" is allowed.\n' +
+        "8. PDF-extracted text is often scrambled (columns overlap, order broken). STILL TRY to map its rows into the format above.\n" +
+        '9. ONLY if the document truly contains no schedule, reply {"jadwal":{},"catatan":"short reason"}.\n';
 
-      /* Format native Gemini: inline_data menerima gambar DAN PDF (base64). */
+      /* Native Gemini format: inline_data accepts images AND PDFs (base64). */
       var dataB64 = String(dataUrl).slice(String(dataUrl).indexOf(",") + 1);
       var mime = isPdf ? "application/pdf" : (file.type || "image/png");
       var body = {
@@ -2252,10 +2294,10 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
       };
 
-      /* --- perapian jawaban AI sebelum dinormalisasi --- */
+      /* --- tidy the AI response before normalization --- */
       function rapikan(obj) {
         if (!obj || typeof obj !== "object") return null;
-        var HARI = ["senin", "selasa", "rabu", "kamis", "jumat", "sabtu", "minggu"];
+        var HARI = ["senin", "selasa", "rabu", "kamis", "jumat", "sabtu", "minggu", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
         var jadwal = obj.jadwal || obj.schedule || obj.hari || null;
         if (!jadwal) {
           var ketemu = false, tmp = {};
@@ -2278,11 +2320,11 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
             if (!r0 || typeof r0 !== "object") return r;
             Object.keys(r0).forEach(function (k0) {
               var k = String(k0).toLowerCase().trim();
-              if (k === "mata_pelajaran" || k === "matpel" || k === "subject" || k === "pelajaran") k = "mapel";
-              if (k === "jam" || k === "waktu" || k === "jam_mulai_selesai") k = "waktu";
-              if (k === "jamke" || k === "jam ke" || k === "jam ke-" || k === "no") k = "jam_ke";
-              if (k === "start" || k === "dari") k = "mulai";
-              if (k === "end" || k === "sampai") k = "selesai";
+              if (k === "mata_pelajaran" || k === "matpel" || k === "subject" || k === "pelajaran" || k === "asignatura" || k === "mati\u00e8re" || k === "fach" || k === "\u79d1\u76ee" || k === "\uacfc\ubaa9") k = "mapel";
+              if (k === "jam" || k === "waktu" || k === "jam_mulai_selesai" || k === "time" || k === "horaire" || k === "\u6642\u9593") k = "waktu";
+              if (k === "jamke" || k === "jam ke" || k === "jam ke-" || k === "no" || k === "period" || k === "periodo" || k === "stunde") k = "jam_ke";
+              if (k === "start" || k === "dari" || k === "inicio" || k === "d\u00e9but" || k === "beginn" || k === "\u958b\u59cb") k = "mulai";
+              if (k === "end" || k === "sampai" || k === "fin" || k === "fim" || k === "ende" || k === "\u7d42\u4e86") k = "selesai";
               r[k] = r0[k0];
             });
             if (r.waktu && (!r.mulai || !r.selesai)) {
@@ -2302,22 +2344,22 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         return out;
       }
 
-      var i = 0, lastErr = "tidak diketahui", gagalKosong = "";
+      var i = 0, lastErr = T("ai.unknownErr"), gagalKosong = "";
       function coba() {
         if (i >= ALAT_AI_MODELS.length) {
           btnAi.disabled = false;
           if (gagalKosong) {
             statusEl.style.color = "var(--amber-500)";
-            statusEl.textContent = "AI tidak menemukan baris jadwal. " + gagalKosong +
-              (isPdf ? " Kalau PDF-nya hasil scan/foto, screenshot halamannya lalu kirim sebagai gambar." : " Coba foto yang lebih jelas/perbesar teksnya.");
+            statusEl.textContent = T("ai.empty", { note: gagalKosong }) +
+              (isPdf ? " " + T("ai.emptyPdf") : " " + T("ai.emptyImg"));
           } else {
             statusEl.style.color = "#fda4a4";
-            statusEl.textContent = "Gagal: " + lastErr;
+            statusEl.textContent = T("ai.failed", { err: lastErr });
           }
           return;
         }
         var model = ALAT_AI_MODELS[i++];
-        statusEl.textContent = "AI sedang memetakan dokumen (" + model + ")...";
+        statusEl.textContent = T("ai.mapping", { model: model });
         fetch("https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent", {
           method: "POST",
           headers: {
@@ -2330,14 +2372,14 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         }).then(function (r) {
           if (!r.ok) {
             var msg = (r.data && r.data.error && r.data.error.message) || ("HTTP " + r.status);
-            if (r.status === 429) msg = "Kuota gratis Gemini habis — coba lagi nanti/besok.";
-             else if (r.status === 400 || r.status === 413) {
+            if (r.status === 429) msg = T("ai.quota");
+            else if (r.status === 400 || r.status === 413) {
               var emsg = String((r.data && r.data.error && r.data.error.message) || "");
               msg = /size|too large|payload|bytes/i.test(emsg)
-                ? "File terlalu besar (maks ±14 MB). Kompres PDF-nya atau screenshot halamannya."
-                : "Permintaan ditolak Gemini: " + (emsg || "periksa key dari Google AI Studio.");
+                ? T("ai.tooLargeReq")
+                : T("ai.rejected", { msg: emsg || "check your Google AI Studio key" });
             }
-            else if (r.status === 401 || r.status === 403) msg = "API key tidak valid atau tidak punya akses (periksa key dari Google AI Studio).";
+            else if (r.status === 401 || r.status === 403) msg = T("ai.badKey");
             lastErr = msg;
             coba();
             return;
@@ -2346,23 +2388,23 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
           var text = parts.map(function (p) { return (p && typeof p.text === "string") ? p.text : ""; }).join("\n");
           text = String(text).replace(/^```(?:json)?/i, "").replace(/```\s*$/, "").trim();
           var a = text.indexOf("{"), b = text.lastIndexOf("}");
-          if (a === -1 || b <= a) { lastErr = "AI tidak mengembalikan JSON valid."; coba(); return; }
+          if (a === -1 || b <= a) { lastErr = T("ai.noJson"); coba(); return; }
           var obj;
           try { obj = JSON.parse(text.slice(a, b + 1)); }
-          catch (e) { lastErr = "AI tidak mengembalikan JSON valid."; coba(); return; }
+          catch (e) { lastErr = T("ai.noJson"); coba(); return; }
           var rapi = rapikan(obj);
           var parsed = alatNormalisasiAI(rapi || obj);
           if (parsed.hariAda.length === 0) {
-            gagalKosong = (obj && obj.catatan) ? obj.catatan : "Dokumen mungkin kosong/terpotong.";
+            gagalKosong = (obj && obj.catatan) ? obj.catatan : "The document may be empty or cut off.";
             coba();
             return;
           }
           btnAi.disabled = false;
           statusEl.style.color = "var(--teal-400)";
-          statusEl.textContent = "✅ Berhasil dipetakan" + ((rapi && rapi.catatan) ? " — " + rapi.catatan : " ") + " Cek pratinjau, lalu Simpan & Import.";
+          statusEl.textContent = T("ai.mapped", { note: (rapi && rapi.catatan) ? " \u2014 " + rapi.catatan + " " : " " });
           onOk(parsed);
         }).catch(function (e) {
-          lastErr = (e && e.message) || "jaringan error";
+          lastErr = (e && e.message) || "network error";
           coba();
         });
       }
@@ -2370,8 +2412,8 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     };
     reader.readAsDataURL(file);
   }
-  
-  
+
+
   function alatRenderPreview(parsed) {
     var wrap = document.getElementById("alat-preview");
     if (!wrap) return;
@@ -2379,20 +2421,20 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     if (parsed.hariAda.length === 0) {
       var p0 = document.createElement("p");
       p0.className = "form-error";
-      p0.textContent = "Tidak ada baris jadwal yang berhasil dibaca. Klik Pratinjau untuk lihat alasannya.";
+      p0.textContent = T("tools.noRows");
       wrap.appendChild(p0);
     }
     parsed.hariAda.forEach(function (d) {
       var title = document.createElement("p");
       title.style.cssText = "margin:10px 0 4px;font-weight:700;font-size:13px;color:var(--teal-400)";
-      title.textContent = NAMA_HARI[d] + " — " + parsed.hasil[d].length + " baris (akan diganti)";
+      title.textContent = T("tools.previewTitle", { day: dayLabel(d), n: parsed.hasil[d].length });
       wrap.appendChild(title);
       var ul = document.createElement("ul");
       ul.style.cssText = "list-style:none;margin:0;padding:0";
       parsed.hasil[d].forEach(function (r) {
         var li = document.createElement("li");
         li.style.cssText = "font-size:12.5px;color:var(--text-muted);padding:2px 0";
-        li.textContent = r.mulai + "-" + r.selesai + " · " + r.mapel + (r.jamKe ? " (Jam " + r.jamKe + ")" : (r.tipe !== "pelajaran" ? " (otomatis)" : ""));
+        li.textContent = r.mulai + "-" + r.selesai + " \u00b7 " + r.mapel + (r.jamKe ? " (" + T("status.period", { n: r.jamKe }) + ")" : (r.tipe !== "pelajaran" ? " " + T("tools.auto") : ""));
         ul.appendChild(li);
       });
       wrap.appendChild(ul);
@@ -2400,7 +2442,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     if (parsed.peringatan.length) {
       var w = document.createElement("p");
       w.style.cssText = "margin:10px 0 0;font-size:12px;color:var(--amber-500)";
-      w.textContent = "Catatan: " + parsed.peringatan.length + " baris dilewati. " + parsed.peringatan.slice(0, 5).join(" ");
+      w.textContent = T("tools.skipped", { n: parsed.peringatan.length, details: parsed.peringatan.slice(0, 5).join(" ") });
       wrap.appendChild(w);
     }
   }
@@ -2417,17 +2459,17 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
 
     var head = document.createElement("div");
     head.className = "modal-head";
-    var h2 = document.createElement("h2"); h2.textContent = "Alat Jadwal";
+    var h2 = document.createElement("h2"); h2.textContent = T("tools.title");
     var close = document.createElement("button");
-    close.className = "icon-btn"; close.textContent = "×";
+    close.className = "icon-btn"; close.textContent = "\u00d7";
     close.onclick = function () { overlay.remove(); };
     head.appendChild(h2); head.appendChild(close);
 
-    /* --- Hari sekolah aktif --- */
+    /* --- Active school days --- */
     var fHari = document.createElement("div");
     fHari.className = "field";
     var lblHari = document.createElement("label");
-    lblHari.textContent = "Hari sekolah aktif:";
+    lblHari.textContent = T("tools.activeDays");
     var boxHari = document.createElement("div");
     boxHari.style.cssText = "display:flex;flex-wrap:wrap;gap:10px";
     [0, 1, 2, 3, 4, 5, 6].forEach(function (d) {
@@ -2438,23 +2480,23 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       cb.checked = hariAktif.indexOf(d) !== -1;
       cb.style.accentColor = "rgb(var(--accent-rgb))";
       lab.appendChild(cb);
-      lab.appendChild(document.createTextNode(NAMA_HARI[d]));
+      lab.appendChild(document.createTextNode(dayLabel(d)));
       boxHari.appendChild(lab);
     });
     fHari.appendChild(lblHari); fHari.appendChild(boxHari);
 
-    /* --- Tempel jadwal manual --- */
+    /* --- Paste a schedule manually --- */
     var fPaste = document.createElement("div");
     fPaste.className = "field";
     var lblPaste = document.createElement("label");
-    lblPaste.textContent = "Tempel jadwal (Excel/Word/WA/apa pun):";
+    lblPaste.textContent = T("tools.pasteLabel");
     var ta = document.createElement("textarea");
     ta.id = "alat-input"; ta.rows = 8;
-    ta.placeholder = "Contoh:\nSenin\n1  07.00 - 07.40  Upacara\n2  07.40 - 08.20  Matematika\nIstirahat\n3  08.20 - 09.00  Informatika";
+    ta.placeholder = T("tools.pastePh");
     ta.style.cssText = "width:100%;padding:11px 12px;border-radius:var(--radius-sm);border:1px solid var(--line);background-color:var(--navy-700);color:var(--text);font-family:inherit;font-size:13px;resize:vertical;box-sizing:border-box";
     fPaste.appendChild(lblPaste); fPaste.appendChild(ta);
 
-        /* --- Petunjuk format: collapsible + animasi slide --- */
+    /* --- Format hint: collapsible with slide animation --- */
     var hintWrap = document.createElement("div");
     hintWrap.className = "alat-cara";
 
@@ -2462,17 +2504,11 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     hintBtn.type = "button";
     hintBtn.className = "alat-cara-btn";
     hintBtn.setAttribute("aria-expanded", "false");
-    hintBtn.innerHTML = "<span>📖 Cara pakai format penulisan</span><i class=\"alat-cara-chev\">▾</i>";
+    hintBtn.innerHTML = "<span>" + T("tools.howTitle") + "</span><i class=\"alat-cara-chev\">\u25be</i>";
 
     var hintBody = document.createElement("div");
     hintBody.className = "alat-cara-body";
-    hintBody.innerHTML =
-      "<ul>" +
-      "<li><b>Baris nama hari</b> (mis. <code>Senin</code>) mulai blok jadwal hari itu.</li>" +
-      "<li>Format pelajaran: <code>[jam ke] 07.40 - 08.20 Matematika</code></li>" +
-      "<li>Tulis <code>Istirahat</code> / <code>Upacara</code> tanpa nomor — posisinya otomatis mengikuti urutan jam.</li>" +
-      "<li>Import hanya mengganti hari yang ada di teks — hari lain tetap aman.</li>" +
-      "</ul>";
+    hintBody.innerHTML = T("tools.howHtml");
 
     hintBtn.onclick = function () {
       var buka = hintWrap.classList.toggle("is-open");
@@ -2483,11 +2519,11 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     hintWrap.appendChild(hintBody);
     fPaste.appendChild(hintWrap);
 
-    /* --- AI: PDF/gambar → jadwal --- */
+    /* --- AI: PDF/image → schedule --- */
     var fAi = document.createElement("div");
     fAi.className = "field";
     var lblAi = document.createElement("label");
-    lblAi.textContent = "Import otomatis dari PDF/Gambar (AI):";
+    lblAi.textContent = T("tools.aiLabel");
     var aiRow = document.createElement("div");
     aiRow.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;align-items:center";
     var fileAi = document.createElement("input");
@@ -2496,13 +2532,13 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     fileAi.style.cssText = "flex:1;min-width:0;font-size:12px";
     var insAi = document.createElement("input");
     insAi.type = "text";
-    insAi.placeholder = "Perintah, mis: ambil jadwal kelas X.4";
+    insAi.placeholder = T("tools.aiPh");
     insAi.style.cssText = "flex:2;min-width:0;padding:9px 11px;border-radius:var(--radius-sm);border:1px solid var(--line);background-color:var(--navy-700);color:var(--text);font-family:inherit;font-size:12.5px";
     aiRow.appendChild(fileAi); aiRow.appendChild(insAi);
     fAi.appendChild(lblAi); fAi.appendChild(aiRow);
     var keyAi = document.createElement("input");
     keyAi.type = "password";
-    keyAi.placeholder = "Gemini API key (disimpan lokal)";
+    keyAi.placeholder = T("tools.keyPh");
     var keyTersimpan = "";
     keyAi.value = "";
     encGet("geminiKey").then(function (v) {
@@ -2519,12 +2555,12 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     var btnSaveKey = document.createElement("button");
     btnSaveKey.type = "button";
     btnSaveKey.className = "btn btn-ghost btn-sm";
-    btnSaveKey.textContent = "💾 Simpan Key";
+    btnSaveKey.textContent = T("tools.saveKey");
 
     var btnAi = document.createElement("button");
     btnAi.type = "button";
     btnAi.className = "btn btn-ghost btn-sm";
-    btnAi.textContent = "🔎 Pindai AI";
+    btnAi.textContent = T("tools.scan");
 
     btnRow.appendChild(btnSaveKey);
     btnRow.appendChild(btnAi);
@@ -2534,10 +2570,10 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     aiStatus.style.cssText = "margin:6px 0 0;font-size:11.5px;color:var(--text-muted)";
     function alatStatusKey() {
       if (keyTersimpan) {
-        aiStatus.textContent = "🔑 Key tersimpan: •••• " + keyTersimpan.slice(-4);
+        aiStatus.textContent = T("tools.keyStored", { last4: keyTersimpan.slice(-4) });
         aiStatus.style.color = "var(--teal-400)";
       } else {
-        aiStatus.textContent = "Key gratis: aistudio.google.com/apikey → Create API key. Model Gemini 2.5 Flash (free tier).";
+        aiStatus.textContent = T("tools.keyFree");
         aiStatus.style.color = "var(--text-muted)";
       }
     }
@@ -2550,23 +2586,23 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         keyTersimpan = kunci;
         encPut("geminiKey", kunci);
         alatStatusKey();
-        showToast("API key disimpan.");
+        showToast(T("misc.keySaved"));
       } else if (keyTersimpan) {
-        if (!confirm("Kolom key kosong. Hapus API key yang tersimpan?")) return;
+        if (!confirm(T("misc.confirmKeyDelete"))) return;
         keyTersimpan = "";
         encDel("geminiKey");
         keyAi.value = "";
         alatStatusKey();
-        showToast("API key terakhir dihapus — masukkan key baru untuk pakai AI.");
+        showToast(T("misc.keyRemoved"));
       } else {
-        showToast("Kolom key kosong — tidak ada yang disimpan/dihapus.");
+        showToast(T("misc.keyEmpty"));
       }
     }
     btnSaveKey.onclick = alatSimpanKey;
     keyAi.addEventListener("keydown", function (e) {
       if (e.key === "Enter") { e.preventDefault(); alatSimpanKey(); }
     });
-    
+
     var preview = document.createElement("div");
     preview.id = "alat-preview";
 
@@ -2574,14 +2610,14 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     actions.className = "modal-actions";
 
     var btnPreview = document.createElement("button");
-    btnPreview.className = "btn btn-ghost"; btnPreview.textContent = "Pratinjau";
+    btnPreview.className = "btn btn-ghost"; btnPreview.textContent = T("tools.preview");
     btnPreview.onclick = function () {
       alatParsedTerakhir = alatParse(ta.value, hariDipilih);
       alatRenderPreview(alatParsedTerakhir);
     };
 
     var btnImport = document.createElement("button");
-    btnImport.className = "btn btn-primary"; btnImport.textContent = "Simpan & Import";
+    btnImport.className = "btn btn-primary"; btnImport.textContent = T("tools.import");
     btnImport.onclick = function () {
       var dipilih = [];
       var hilangHari = [];
@@ -2590,18 +2626,14 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
         if (cb.checked) dipilih.push(d);
         else if (JADWAL[d] && JADWAL[d].length > 0) hilangHari.push(d);
       });
-      if (dipilih.length === 0) { showToast("Minimal 1 hari harus aktif."); return; }
+      if (dipilih.length === 0) { showToast(T("tools.minDay")); return; }
 
-      /* PERINGATAN: hari yang punya jadwal akan dinonaktifkan */
+      /* WARNING: days that already have schedules will be deactivated */
       if (hilangHari.length > 0) {
         var daftar = hilangHari.map(function (d) {
-          return NAMA_HARI[d] + " (" + JADWAL[d].length + " baris jadwal)";
+          return dayLabel(d) + " (" + JADWAL[d].length + ")";
         }).join(", ");
-        var yakin = confirm(
-          "⚠️ " + daftar + " masih memiliki jadwal.\n\n" +
-          "Hari ini akan dinonaktifkan. Jadwalnya TIDAK dihapus — " +
-          "hanya disembunyikan dari tab hari dan perhitungan deadline.\n\nLanjutkan?"
-        );
+        var yakin = confirm(T("tools.deactivateWarn", { days: daftar }));
         if (!yakin) {
           boxHari.querySelectorAll("input[type=checkbox]").forEach(function (cb) {
             if (hilangHari.indexOf(parseInt(cb.value, 10)) !== -1) cb.checked = true;
@@ -2616,31 +2648,27 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
 
       if (parsed.hariAda.length === 0) {
         refreshSemua(); overlay.remove();
-        showToast("Hari sekolah disimpan (tidak ada jadwal terbaca).");
+        showToast(T("tools.savedNoRows"));
         return;
       }
-            /* PERINGATAN: hari yang akan DITIMPA (sudah punya jadwal) */
+      /* WARNING: days about to be OVERWRITTEN (they already have schedules) */
       var ketimpa = parsed.hariAda.filter(function (d) {
         return JADWAL[d] && JADWAL[d].length > 0;
       });
       if (ketimpa.length > 0) {
         var daftarTimpa = ketimpa.map(function (d) {
-          return NAMA_HARI[d] + " (" + JADWAL[d].length + " baris lama → " + parsed.hasil[d].length + " baris baru)";
+          return T("tools.rows", { day: dayLabel(d), old: JADWAL[d].length, new: parsed.hasil[d].length });
         }).join("\n");
-        var yakinTimpa = confirm(
-          "⚠️ Jadwal berikut akan DITIMPA:\n\n" + daftarTimpa + "\n\n" +
-          "Baris lama di hari tersebut diganti seluruhnya dengan hasil import.\n" +
-          "Tips: backup dulu lewat Profil → Backup kalau ragu.\n\nLanjutkan?"
-        );
+        var yakinTimpa = confirm(T("tools.overwriteWarn", { list: daftarTimpa }));
         if (!yakinTimpa) return;
       }
 
-      
+
       parsed.hariAda.forEach(function (d) { JADWAL[d] = parsed.hasil[d]; });
       simpanJadwal();
       refreshSemua();
       overlay.remove();
-      showToast("Terimport: " + parsed.hariAda.map(function (d) { return NAMA_HARI[d]; }).join(", "));
+      showToast(T("tools.imported", { days: parsed.hariAda.map(function (d) { return dayLabel(d); }).join(", ") }));
     };
 
     actions.appendChild(btnPreview); actions.appendChild(btnImport);
@@ -2658,7 +2686,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     });
     document.body.appendChild(overlay);
 
-    /* Hasil AI tidak valid lagi kalau sumbernya diubah */
+    /* AI results become invalid when their source changes */
     ta.addEventListener("input", function () { alatParsedTerakhir = null; });
     fileAi.addEventListener("change", function () { alatParsedTerakhir = null; });
 
@@ -2670,16 +2698,16 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       });
     };
   }
-  
+
   function mulaiAlat() {
     if (document.getElementById("btn-alat-jadwal")) return;
     var btn = document.createElement("button");
     btn.id = "btn-alat-jadwal";
     btn.className = "btn btn-ghost btn-sm";
-    btn.textContent = "Alat";
+    btn.textContent = T("tools.btn");
     btn.onclick = alatBukaModal;
     if (el.btnTambahJadwal && el.btnTambahJadwal.parentNode) {
-      /* Taruh Alat di samping tombol + Tambah dalam satu baris aksi */
+      /* Put Tools beside the + Add button in one action row */
       var baris = document.createElement("div");
       baris.className = "panel-head-actions";
       el.btnTambahJadwal.parentNode.insertBefore(baris, el.btnTambahJadwal);

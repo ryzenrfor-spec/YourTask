@@ -1,57 +1,56 @@
-# YourTask — Jadwal & Tugas Sekolah
+# YourTask — Class Schedule & Tasks
 
-> Jadwal pelajaran, countdown KBM real-time, alarm deadline otomatis — semua lokal, terenkripsi, tanpa akun, tanpa iklan.
+> Class schedule, real-time session countdown, automatic deadline reminders — fully local, encrypted, no account, no ads.
 
-**YourTask** adalah PWA (Progressive Web App) untuk siswa: tahu kapan pelajaran dimulai, sisa berapa menit jam pelajaran berjalan, dan tugas mana yang mepet deadline — tanpa registrasi, tanpa server, tanpa iklan. Seluruh data disimpan **terenkripsi AES-256-GCM di perangkat** (IndexedDB).
+**YourTask** is a Progressive Web App for students: know when your next lesson starts, how many minutes are left in the current one, and which tasks are due within 24 hours — without registration, servers, or advertising. All data is stored **AES-256-GCM encrypted on the device** (IndexedDB).
 
-Dikembangkan oleh [ryzenrfor-spec](https://github.com/ryzenrfor-spec) · generasi kedua dari [LiliTask](https://github.com/ryzenrfor-spec) (versi 1).
+**Developed by ErlanggaDev Studios** · Contact: erlanggadev.studios@gmail.com · Second generation of [LiliTask](https://github.com/ryzenrfor-spec) (v1).
 
 ---
 
-## ✨ Fitur
+## ✨ Features
 
-| Fitur | Detail |
+| Feature | Detail |
 |---|---|
-| 🕒 **Countdown KBM real-time** | Tahu posisi jam pelajaran saat ini dan sisa waktunya, zona Asia/Jakarta, detik demi detik |
-| ⏰ **Alarm deadline pintar** | Notifikasi tugas yang jatuh tempo ≤24 jam, dikaitkan dengan jadwal — jelas kapan kelas mapel itu berikutnya |
-| 🔄 **Pembersihan tugas otomatis** | Tugas mingguan direset saat pekan berganti, mengikuti hari aktif yang dipilih |
-| 🤖 **Pindai AI (Gemini)** | Foto atau PDF jadwal sekolah langsung jadi jadwal digital — pakai API key Gemini gratis milikmu sendiri |
-| 🔐 **Enkripsi AES-256-GCM** | Standar NIST via Web Crypto API; kunci non-extractable, data tak terbaca dari luar aplikasi |
-| 📴 **Offline-first** | Service worker cache-first — jalan penuh tanpa internet |
-| 🧭 **Sinkronisasi waktu** | Offset server (RTT-compensated) menjaga alarm tetap akurat meski jam perangkat salah |
-| 📅 **Jam aktif fleksibel** | Pilih hari sekolah aktif; Sabtu/Minggu dihormati di semua perhitungan |
-| 💾 **Backup & restore JSON** | Ekspor/impor seluruh data kapan pun — format terbuka |
-| 🚫 **Nol akun, nol iklan, nol tracking** | Privasi bukan fitur — arsitektur |
+| 🕒 **Real-time session tracking** | Know the current period and how long it will run, down to the second, in your device's time zone |
+| ⏰ **Smart deadline reminders** | Notifications for tasks due within 24 hours, linked to the schedule — always showing when that class starts next |
+| 🌍 **12 languages** | Formal English base + Indonesian, Spanish, French, Portuguese, German, Russian, Arabic (RTL), Hindi, Chinese, Japanese, Korean — follows the device language by default |
+| 🔄 **Automatic task cleanup** | Weekly tasks reset when the school week rolls over, respecting the configured active days |
+| 🤖 **AI Scan (Gemini)** | A photo or PDF of a school timetable becomes a digital schedule in one tap — using your own free Gemini API key |
+| 📋 **Paste-to-import** | Copy a timetable from Excel, Word, or WhatsApp and paste it; the parser understands day names in many languages |
+| 🔐 **AES-256-GCM encryption** | NIST standard via the Web Crypto API; non-extractable key — data is unreadable from outside the app |
+| 🎨 **Themes & custom icon** | Gradient presets, gallery wallpaper with a crop editor (pan/pinch/zoom), custom accent color, custom in-app icon |
+| 📴 **Offline-first** | Cache-first service worker — fully functional without internet |
+| 🧭 **Time synchronization** | RTT-compensated server offset keeps alarms accurate even when the device clock is wrong |
+| 📅 **Flexible school days** | Choose the active school days; non-active days are respected in every calculation |
+| 💾 **Backup & restore (JSON)** | Export/import everything at any time — open format |
+| 🚫 **Zero accounts, zero ads, zero tracking** | Privacy is not a feature — it is the architecture |
 
-## 🚀 Cara pakai
+## 🚀 Getting started
 
-**Web (langsung):** buka [ryzenrfor-spec.github.io/YourTask](https://ryzenrfor-spec.github.io/YourTask/) → *Install app* / *Tambahkan ke layar utama* dari menu browser.
+**Web (direct):** open [ryzenrfor-spec.github.io/YourTask](https://ryzenrfor-spec.github.io/YourTask/) → *Install app* / *Add to Home Screen* from the browser menu.
 
-**Pindai AI:** ambil API key gratis di [aistudio.google.com/apikey](https://aistudio.google.com/apikey) → menu **Alat** → tempel key → simpan. Key tersimpan terenkripsi di perangkatmu.
+**AI Scan:** get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) → open **Tools** → paste the key → save. The key is stored encrypted on your device.
 
-## 🏗️ Teknologi
+**Language:** Profile → Language. The default follows the device language; the explicit choice is remembered.
 
-```
-Vanilla JavaScript · Web Crypto API · IndexedDB · Service Worker
-Cache-first PWA · Web Notifications · Periodic Background Sync
-```
+## 🔐 Privacy
 
-Tanpa framework, tanpa build step, tanpa dependency runtime — ~100KB statis.
+No accounts. No analytics. No advertising SDKs. Data never leaves the device (except the two opt-in cases described in the [Privacy Policy](privacy.html): public time sync and the direct-to-Google AI scan). The encryption key is non-extractable by browser guarantee.
 
-## 🔒 Privasi
+## 🏗️ Tech stack
 
-- Semua data (jadwal, tugas, profil, API key) disimpan **lokal dan terenkripsi** — detail lengkap di [Kebijakan Privasi](privacy.html)
-- Layanan eksternal yang dihubungi hanya saat dipakai: Gemini API (fitur Pindai AI, eksplisit) dan WorldTimeAPI (sinkron waktu)
-- Tidak ada analytics, tidak ada cookie, tidak ada data yang keluar dari perangkat
+Vanilla JavaScript (ES2017+), PWA (service worker + web app manifest), IndexedDB + Web Crypto API, no frameworks, no build step.
 
 ## 🗺️ Roadmap
 
-- [ ] i18n — dukungan bahasa Inggris (persiapan pasar global)
-- [ ] Proxy API key (opsional) — scan AI tanpa perlu key sendiri
-- [ ] Sinkronisasi antar perangkat, E2E-encrypted
-- [ ] Packaging Android via TWA untuk Google Play
+- [ ] Play Store release (via Trusted Web Activity)
+- [ ] Multi-class schedule profiles
+- [ ] Optional encrypted cloud sync
+- [ ] Widget / quick tile support
 
-## 📄 Lisensi
+## ©️ License & credits
 
-Hak cipta © 2026 Erlangga Dev Studios · Dibuat dengan ❤️ oleh seorang siswa, untuk siswa.
-Kontak: erlanggadev.studios@gmail.com
+© 2026 ErlanggaDev Studios. All rights reserved.
+
+Built for students, worldwide.

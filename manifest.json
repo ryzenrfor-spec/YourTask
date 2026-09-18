@@ -1,8 +1,8 @@
 {
-  "name": "YourTask — Jadwal & Tugas Sekolah",
+  "name": "YourTask — Class Schedule & Tasks",
   "short_name": "YourTask",
-  "description": "Aplikasi jadwal pelajaran dan pencatat tugas dengan deteksi KBM real-time WIB, alarm deadline otomatis, dan data tersimpan terenkripsi di perangkat.",
-  "lang": "id",
+  "description": "Class schedule with real-time session tracking, automatic deadline reminders, and fully encrypted on-device storage. No account, no ads.",
+  "lang": "en",
   "dir": "ltr",
   "id": "./",
   "start_url": "./",

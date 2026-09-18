@@ -1,15 +1,16 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f172a" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://generativelanguage.googleapis.com https://worldtimeapi.org; base-uri 'self'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests" />
-    <title>YourTask — Aplikasi Jadwal & Tugas</title>
+    <title>YourTask — Class Schedule &amp; Tasks</title>
     <meta
       name="description"
-      content="YourTask: aplikasi jadwal pelajaran dan pencatat tugas dengan deteksi KBM real-time WIB dan sinkronisasi deadline otomatis."
+      content="YourTask by ErlanggaDev Studios: a private class timetable and task tracker with real-time lesson countdown, automatic deadline alarms, and encrypted on-device storage."
     />
+    <meta name="author" content="ErlanggaDev Studios" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -23,18 +24,17 @@
     <link rel="manifest" href="manifest.json" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="YourTask" />
-    <meta property="og:title" content="YourTask — Jadwal & Tugas Sekolah" />
-    <meta property="og:description" content="Jadwal pelajaran, countdown KBM real-time, alarm deadline otomatis. Data terenkripsi di perangkatmu — tanpa akun, tanpa iklan." />
+    <meta property="og:title" content="YourTask — Class Schedule &amp; Tasks" />
+    <meta property="og:description" content="Class timetable, real-time lesson countdown, automatic deadline alarms. Encrypted on your device — no account, no ads." />
     <meta property="og:url" content="https://ryzenrfor-spec.github.io/YourTask/" />
     <meta property="og:image" content="https://ryzenrfor-spec.github.io/YourTask/icon-512.png" />
     <meta name="twitter:card" content="summary" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="YourTask" />
-    
   </head>
   <body>
-    <!-- Layer wallpaper kustom (tema) — paling belakang, di bawah seluruh UI -->
+    <!-- Custom wallpaper layer (theme) — behind the entire UI -->
     <div id="wallpaper-layer" aria-hidden="true"></div>
     <div class="app-shell">
       <!-- ============ HEADER ============ -->
@@ -43,28 +43,28 @@
           <img src="icon.png" alt="Logo" id="brand-icon" class="brand-mark" style="object-fit: cover; border-radius: 8px;" />
           <div class="brand-text">
             <div style="display: flex; align-items: center; gap: 6px;">
-              <h1 id="display-username">Memuat...</h1>
-              <button id="btn-edit-user" class="icon-btn" style="width: 26px; height: 26px; font-size: 14px;" aria-label="Edit Profil">⚙️</button>
+              <h1 id="display-username" data-i18n="misc.loading">Loading…</h1>
+              <button id="btn-edit-user" class="icon-btn" style="width: 26px; height: 26px; font-size: 14px;" aria-label="Edit profile" data-i18n-aria="prof.title">⚙️</button>
             </div>
-            <p id="display-sekolah">Asal Sekolah</p>
+            <p id="display-sekolah" data-i18n="school.default">My School</p>
           </div>
         </div>
         <div class="clock" aria-live="polite">
           <span id="jam-realtime" class="clock-time">--:--:--</span>
-          <span id="hari-realtime" class="clock-day">Memuat&hellip;</span>
-          <span class="clock-zone" id="clock-zone">WIB</span>
+          <span id="hari-realtime" class="clock-day">Loading…</span>
+          <span class="clock-zone" id="clock-zone">UTC</span>
         </div>
       </header>
 
       <main>
-        <!-- ============ STATUS KBM ============ -->
+        <!-- ============ CLASS STATUS ============ -->
         <section id="card-status" class="status-card" aria-labelledby="status-label">
           <div class="status-top">
-            <span id="status-label" class="status-badge">Status KBM</span>
+            <span id="status-label" class="status-badge" data-i18n="status.badge">Class Status</span>
             <span id="status-jam-ke" class="status-jamke"></span>
           </div>
-          <h2 id="status-mapel" class="status-mapel">Memuat status&hellip;</h2>
-          <p id="status-detail" class="status-detail">Menyinkronkan waktu&hellip;</p>
+          <h2 id="status-mapel" class="status-mapel" data-i18n="misc.loadingStatus">Loading status…</h2>
+          <p id="status-detail" class="status-detail" data-i18n="misc.syncing">Syncing time…</p>
           <div class="progress-wrap" id="progress-wrap" hidden>
             <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
             <span class="progress-text" id="progress-text"></span>
@@ -72,134 +72,140 @@
           <p id="status-berikutnya" class="status-next"></p>
         </section>
 
-        <!-- ============ NOTIFIKASI DEADLINE 24 JAM ============ -->
+        <!-- ============ 24-HOUR DEADLINE ALERT ============ -->
         <section id="banner-notifikasi" class="alert-banner" role="status" hidden>
           <span class="alert-icon" aria-hidden="true">!</span>
           <div class="alert-body">
-            <strong>Deadline mendekat <span style="white-space:nowrap;">(&lt;&nbsp;24&nbsp;jam)</span></strong>
+            <strong data-i18n-html="banner.urgent.title">Deadline approaching <span style="white-space:nowrap;">(&lt;&nbsp;24&nbsp;h)</span></strong>
             <p id="banner-teks"></p>
           </div>
-          <button type="button" id="btn-izin-notif" class="btn btn-ghost btn-sm">Aktifkan Notifikasi</button>
+          <button type="button" id="btn-izin-notif" class="btn btn-ghost btn-sm" data-i18n="banner.enable">Enable Notifications</button>
         </section>
 
-        <!-- ============ PERINGATAN KONTEKS TIDAK AMAN (HTTP) ============ -->
+        <!-- ============ INSECURE CONTEXT (HTTP) WARNING ============ -->
         <section id="banner-insecure" class="alert-banner" role="alert" hidden>
           <span class="alert-icon" aria-hidden="true">!</span>
           <div class="alert-body">
-            <strong>Koneksi tidak aman (HTTP)</strong>
-            <p>Enkripsi data &amp; notifikasi latar belakang butuh HTTPS. Buka lewat https:// agar data tetap terlindungi.</p>
+            <strong data-i18n="banner.insecure.title">Insecure connection (HTTP)</strong>
+            <p data-i18n="banner.insecure.body">Encrypted storage and background notifications require HTTPS. Open this app via https:// to keep your data protected.</p>
           </div>
         </section>
 
-        <!-- ============ TUGAS ============ -->
+        <!-- ============ TASKS ============ -->
         <section class="panel" aria-labelledby="judul-tugas">
           <div class="panel-head">
             <div>
-              <h2 id="judul-tugas">Daftar Tugas</h2>
-              <p id="ringkasan-tugas" class="panel-sub">Belum ada tugas</p>
+              <h2 id="judul-tugas" data-i18n="tasks.title">Task List</h2>
+              <p id="ringkasan-tugas" class="panel-sub" data-i18n="tasks.empty">No tasks yet</p>
             </div>
-            <button type="button" id="btn-buka-modal" class="btn btn-primary btn-sm">+ Tambah</button>
+            <button type="button" id="btn-buka-modal" class="btn btn-primary btn-sm" data-i18n="tasks.add">+ Add</button>
           </div>
-          <div class="filter-row" role="group" aria-label="Filter tugas">
-            <button type="button" class="chip is-active" data-filter="aktif">Aktif</button>
-            <button type="button" class="chip" data-filter="selesai">Selesai</button>
-            <button type="button" class="chip" data-filter="semua">Semua</button>
+          <div class="filter-row" role="group" aria-label="Task filters">
+            <button type="button" class="chip is-active" data-filter="aktif" data-i18n="tasks.active">Active</button>
+            <button type="button" class="chip" data-filter="selesai" data-i18n="tasks.completed">Completed</button>
+            <button type="button" class="chip" data-filter="semua" data-i18n="tasks.all">All</button>
           </div>
           <div class="filter-row" style="margin-top: 8px; gap: 8px;">
-            <input type="search" id="cari-tugas" placeholder="Cari tugas / mapel…" style="flex: 1; min-width: 0;" />
+            <input type="search" id="cari-tugas" placeholder="Search tasks / subjects…" style="flex: 1; min-width: 0;" data-i18n-placeholder="tasks.searchPh" />
             <select id="filter-mapel" style="flex: 0 0 auto; max-width: 45%;">
-              <option value="semua">— Semua mapel —</option>
+              <option value="semua" data-i18n="tasks.allSubjects">— All subjects —</option>
             </select>
           </div>
           <ul id="daftar-tugas" class="task-list"></ul>
-          <p id="tugas-kosong" class="empty-state">Belum ada tugas di daftar ini. Tekan <strong>+ Tambah</strong> untuk mencatat tugas baru.</p>
+          <p id="tugas-kosong" class="empty-state" data-i18n-html="tasks.emptyState">Nothing here yet. Tap <strong>+ Add</strong> to record a new task.</p>
         </section>
 
-        <!-- ============ JADWAL HARI INI ============ -->
+        <!-- ============ TODAY'S SCHEDULE ============ -->
         <section class="panel" aria-labelledby="judul-jadwal">
           <div class="panel-head">
             <div>
-              <h2 id="judul-jadwal">Jadwal Pelajaran</h2>
-              <p class="panel-sub">Daftar pelajaran hari ini</p>
+              <h2 id="judul-jadwal" data-i18n="sched.title">Class Schedule</h2>
+              <p class="panel-sub" data-i18n="sched.sub">Today's lessons</p>
             </div>
-            <button type="button" id="btn-tambah-jadwal" class="btn btn-primary btn-sm">+ Tambah</button>
+            <button type="button" id="btn-tambah-jadwal" class="btn btn-primary btn-sm" data-i18n="tasks.add">+ Add</button>
           </div>
-          <div class="day-tabs" id="tab-hari" role="tablist" aria-label="Pilih hari"></div>
+          <div class="day-tabs" id="tab-hari" role="tablist" aria-label="Choose a day"></div>
           <ul id="daftar-jadwal" class="schedule-list"></ul>
-          
-          <p id="jadwal-kosong" class="empty-state" hidden>
-            Waduh, kamu belum menambahkan jadwal pelajaran nih, ketuk tanda plus (tambah) untuk menambahkan jadwal kamu!
+
+          <p id="jadwal-kosong" class="empty-state" hidden data-i18n="sched.emptyState">
+            You haven't added a class schedule yet — tap the plus (+) button to build your timetable.
           </p>
         </section>
       </main>
 
       <footer class="app-footer">
-        <p>LiliTask &middot; Custom Edition</p>
-        <p class="footer-sub">Data tersimpan terenkripsi (AES-256-GCM) di IndexedDB browser. · <a href="privacy.html" style="color:inherit;">Kebijakan Privasi</a> · erlanggadev.studios@gmail.com</p>
+        <p data-i18n="footer.brand">© 2026 ErlanggaDev Studios · Crafted for students, worldwide</p>
+        <p class="footer-sub"><span data-i18n="misc.dataEnc">Data is stored encrypted (AES-256-GCM) in your browser.</span> · <a href="privacy.html" style="color:inherit;" data-i18n="footer.privacy">Privacy Policy</a> · erlanggadev.studios@gmail.com</p>
       </footer>
     </div>
 
-    <!-- ============ MODAL TAMBAH / EDIT TUGAS ============ -->
+    <!-- ============ ADD / EDIT TASK MODAL ============ -->
     <div class="modal-overlay" id="modal-overlay" hidden role="dialog" aria-modal="true">
       <div class="modal" role="document">
         <div class="modal-head">
-          <h2 id="modal-title">Tambah Tugas</h2>
+          <h2 id="modal-title" data-i18n="form.addTask">Add Task</h2>
           <button type="button" id="btn-tutup-modal" class="icon-btn">&times;</button>
         </div>
         <form id="form-tugas" novalidate>
           <div class="field">
-            <label for="input-mapel">Mata Pelajaran</label>
+            <label for="input-mapel" data-i18n="form.subject">Subject</label>
             <select id="input-mapel" name="mapel" required>
-              <option value="">— Pilih mata pelajaran —</option>
+              <option value="" data-i18n="form.pickSubject">— Choose a subject —</option>
             </select>
-            <p class="hint">Deadline dihitung otomatis dari jadwal berdasarkan mapel ini.</p>
+            <p class="hint" data-i18n="form.subjectHint">The deadline is calculated automatically from your schedule based on this subject.</p>
           </div>
           <div class="field">
-            <label for="input-detail">Detail Tugas</label>
-            <input type="text" id="input-detail" maxlength="140" placeholder="Contoh: Halaman 45 nomor 1-10" required />
+            <label for="input-detail" data-i18n="form.detail">Task Details</label>
+            <input type="text" id="input-detail" maxlength="140" placeholder="e.g. Page 45, problems 1–10" required data-i18n-placeholder="form.detailPh" />
           </div>
           <div class="field">
-            <label for="input-berulang">Pengulangan</label>
+            <label for="input-berulang" data-i18n="form.repeat">Repeat</label>
             <select id="input-berulang">
-              <option value="tidak">Tidak berulang</option>
-              <option value="mingguan">Berulang mingguan</option>
-              <option value="hari_ini">Hanya hari ini</option>
+              <option value="tidak" data-i18n="form.repeatNone">Does not repeat</option>
+              <option value="mingguan" data-i18n="form.repeatWeekly">Repeats weekly</option>
+              <option value="hari_ini" data-i18n="form.repeatToday">Today only</option>
             </select>
-            <p class="hint">Mingguan: saat ditandai selesai, deadline otomatis pindah ke pekan berikutnya.</p>
+            <p class="hint" data-i18n="form.repeatHint">Weekly: when marked done, the deadline automatically moves to next week.</p>
           </div>
           <div class="field">
-            <span class="label-static">Deadline (otomatis)</span>
-            <div class="deadline-preview" id="preview-deadline">Pilih mapel untuk melihat deadline.</div>
+            <span class="label-static" data-i18n="form.deadlineAuto">Deadline (automatic)</span>
+            <div class="deadline-preview" id="preview-deadline" data-i18n="form.deadlinePreview">Choose a subject to see its deadline.</div>
           </div>
           <p id="form-error" class="form-error" role="alert" hidden></p>
           <div class="modal-actions">
-            <button type="button" id="btn-batal" class="btn btn-ghost">Batal</button>
-            <button type="submit" id="btn-submit-tugas" class="btn btn-primary">Simpan Tugas</button>
+            <button type="button" id="btn-batal" class="btn btn-ghost" data-i18n="form.cancel">Cancel</button>
+            <button type="submit" id="btn-submit-tugas" class="btn btn-primary" data-i18n="form.save">Save Task</button>
           </div>
         </form>
       </div>
     </div>
 
-    <!-- ============ MODAL EDIT PROFIL & PENGATURAN ============ -->
+    <!-- ============ PROFILE & SETTINGS MODAL ============ -->
     <div class="modal-overlay" id="modal-profil" hidden>
       <div class="modal">
           <div class="modal-head">
-              <h2>Profil & Pengaturan</h2>
+              <h2 data-i18n="prof.title">Profile &amp; Settings</h2>
               <button type="button" id="btn-tutup-profil" class="icon-btn">&times;</button>
           </div>
           <form id="form-profil">
               <div class="field">
-                  <label for="input-username">Nama Pengguna</label>
+                  <label for="input-username" data-i18n="prof.username">Display Name</label>
                   <input type="text" id="input-username" required />
               </div>
               <div class="field">
-                  <label for="input-sekolah">Asal Sekolah</label>
+                  <label for="input-sekolah" data-i18n="prof.school">School</label>
                   <input type="text" id="input-sekolah" required />
               </div>
               <div class="field">
-                  <label for="input-timezone">Zona Waktu (jadwal sekolah)</label>
+                  <label for="input-language" data-i18n="prof.language">Language</label>
+                  <select id="input-language">
+                  </select>
+                  <p class="hint" data-i18n="prof.languageHint">Choose from 12 world languages. By default it follows your device language.</p>
+              </div>
+              <div class="field">
+                  <label for="input-timezone" data-i18n="prof.timezone">Time Zone (school schedule)</label>
                   <select id="input-timezone">
-                      <option value="auto">Otomatis (ikuti perangkat)</option>
+                      <option value="auto" data-i18n="prof.tzAuto">Automatic (follow device)</option>
                       <option value="Asia/Jakarta">Asia/Jakarta (WIB)</option>
                       <option value="Asia/Pontianak">Asia/Pontianak (WIB)</option>
                       <option value="Asia/Makassar">Asia/Makassar (WITA)</option>
@@ -220,205 +226,205 @@
                       <option value="America/Los_Angeles">America/Los_Angeles</option>
                       <option value="UTC">UTC</option>
                   </select>
-                  <p class="hint">Menentukan jam masuk, status KBM &amp; deadline. "Otomatis" memakai zona perangkatmu.</p>
+                  <p class="hint" data-i18n="prof.tzHint">Determines start times, class status and deadlines. "Automatic" uses your device's zone.</p>
               </div>
-            
+
             <hr style="border: 0; border-top: 1px dashed var(--line); margin: 20px 0 10px;">
-            
+
             <div class="field">
-              <label>Tema — Wallpaper</label>
+              <label data-i18n="prof.themeWallpaper">Theme — Wallpaper</label>
               <div id="tema-preset-grid" class="preset-grid" style="margin-bottom: 8px;"></div>
-              <button type="button" id="btn-tema-galeri" class="btn btn-ghost" style="width: 100%; height: 38px; font-size: 12px; margin-top: 4px;">🖼️ Dari Galeri…</button>
+              <button type="button" id="btn-tema-galeri" class="btn btn-ghost" style="width: 100%; height: 38px; font-size: 12px; margin-top: 4px;" data-i18n="prof.fromGallery">🖼️ From Gallery…</button>
               <input type="file" id="input-tema-galeri" accept="image/*" style="display: none;">
               <div id="tema-editor-wrap" hidden style="margin-top: 10px;">
-                <p style="margin: 0 0 6px; font-size: 11.5px; color: var(--text-muted);">Geser untuk memposisikan · pinch/slider untuk zoom · bingkai ini = hasil akhir di layarmu.</p>
+                <p style="margin: 0 0 6px; font-size: 11.5px; color: var(--text-muted);" data-i18n="prof.cropHint">Drag to position · pinch or slider to zoom · this frame is exactly how it will look.</p>
                 <div id="tema-crop-stage" class="crop-stage"><img class="crop-img" alt=""></div>
                 <div class="crop-actions">
-                  <input type="range" id="tema-zoom-range" min="100" max="400" value="100" aria-label="Zoom wallpaper">
-                  <button type="button" id="tema-dim-turun" class="theme-mini-btn">Gelap −</button>
-                  <button type="button" id="tema-dim-naik" class="theme-mini-btn">Gelap +</button>
+                  <input type="range" id="tema-zoom-range" min="100" max="400" value="100" aria-label="Wallpaper zoom">
+                  <button type="button" id="tema-dim-turun" class="theme-mini-btn" data-i18n="prof.dimDown">Dim −</button>
+                  <button type="button" id="tema-dim-naik" class="theme-mini-btn" data-i18n="prof.dimUp">Dim +</button>
                 </div>
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
-                  <button type="button" id="tema-terapkan" class="btn btn-primary" style="flex: 1; height: 38px; font-size: 13px;">Terapkan Wallpaper</button>
-                  <button type="button" id="tema-batal" class="btn btn-ghost" style="height: 38px; font-size: 13px;">Batal</button>
+                  <button type="button" id="tema-terapkan" class="btn btn-primary" style="flex: 1; height: 38px; font-size: 13px;" data-i18n="prof.applyWallpaper">Apply Wallpaper</button>
+                  <button type="button" id="tema-batal" class="btn btn-ghost" style="height: 38px; font-size: 13px;" data-i18n="form.cancel">Cancel</button>
                 </div>
               </div>
             </div>
-            
+
             <div class="field">
-              <label>Tema — Warna Aksen</label>
+              <label data-i18n="prof.themeAccent">Theme — Accent Color</label>
               <div style="display: flex; gap: 8px; align-items: center;">
                 <div id="tema-warna-grid" class="preset-grid" style="flex: 1; grid-template-columns: repeat(5, 1fr);"></div>
               </div>
               <label for="tema-warna-input" class="hint" style="display: flex; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer;">
-                <input type="color" id="tema-warna-input" value="#14b8a6" style="width: 34px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--navy-700); cursor: pointer;"> Warna kustom…
+                <input type="color" id="tema-warna-input" value="#14b8a6" style="width: 34px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--navy-700); cursor: pointer;"> <span data-i18n="prof.customColor">Custom color…</span>
               </label>
             </div>
 
             <div class="field">
-              <label>Ikon Aplikasi (dalam app)</label>
+              <label data-i18n="prof.icon">App Icon (in-app)</label>
               <div class="icon-picker-row">
                 <div id="ikon-preview" class="icon-preview">Y</div>
                 <div style="flex: 1; min-width: 0;">
-                  <label for="input-ikon-galeri" class="theme-mini-btn" style="display: inline-flex; align-items: center; cursor: pointer;">🎨 Pilih Gambar…</label>
+                  <label for="input-ikon-galeri" class="theme-mini-btn" style="display: inline-flex; align-items: center; cursor: pointer;" data-i18n="prof.pickImage">🎨 Choose Image…</label>
                   <input type="file" id="input-ikon-galeri" accept="image/*" style="display: none;">
-                  <button type="button" id="btn-ikon-reset" class="theme-mini-btn danger" style="margin-left: 6px;">Reset</button>
+                  <button type="button" id="btn-ikon-reset" class="theme-mini-btn danger" style="margin-left: 6px;" data-i18n="prof.reset">Reset</button>
                 </div>
               </div>
               <div id="ikon-editor-wrap" hidden style="margin-top: 10px;">
-                <p style="margin: 0 0 6px; font-size: 11.5px; color: var(--text-muted);">Bingkai persegi = ikon aplikasimu. Geser &amp; zoom, lalu Terapkan.</p>
+                <p style="margin: 0 0 6px; font-size: 11.5px; color: var(--text-muted);" data-i18n="prof.iconCropHint">The square frame becomes your app icon. Drag &amp; zoom, then Apply.</p>
                 <div id="ikon-crop-stage" class="crop-stage crop-square"><img class="crop-img" alt=""></div>
                 <div class="crop-actions">
-                  <input type="range" id="ikon-zoom-range" min="100" max="400" value="100" aria-label="Zoom ikon">
+                  <input type="range" id="ikon-zoom-range" min="100" max="400" value="100" aria-label="Icon zoom">
                 </div>
                 <div style="display: flex; gap: 8px; margin-top: 8px;">
-                  <button type="button" id="ikon-terapkan" class="btn btn-primary" style="flex: 1; height: 38px; font-size: 13px;">Terapkan Ikon</button>
-                  <button type="button" id="ikon-batal" class="btn btn-ghost" style="height: 38px; font-size: 13px;">Batal</button>
+                  <button type="button" id="ikon-terapkan" class="btn btn-primary" style="flex: 1; height: 38px; font-size: 13px;" data-i18n="prof.applyIcon">Apply Icon</button>
+                  <button type="button" id="ikon-batal" class="btn btn-ghost" style="height: 38px; font-size: 13px;" data-i18n="form.cancel">Cancel</button>
                 </div>
               </div>
-              <p class="hint" style="margin-top: 8px;">Ikon ini tampil di header dalam app (ikon launcher HP mengikuti instalasi).</p>
+              <p class="hint" style="margin-top: 8px;" data-i18n="prof.iconHint">This icon appears in the in-app header (the home-screen icon follows installation).</p>
             </div>
 
             <hr style="border: 0; border-top: 1px dashed var(--line); margin: 20px 0 10px;">
-            
+
             <div class="field" style="margin-bottom: 0;">
-                <label>Data Aplikasi (Backup/Restore)</label>
+                <label data-i18n="prof.data">App Data (Backup / Restore)</label>
                   <div style="display: flex; gap: 10px; margin-top: 6px;">
-                      <button type="button" id="btn-backup-data" class="btn btn-ghost" style="flex: 1; font-size: 12px; height: 38px;">📥 Backup</button>
-                      <label for="input-restore-data" class="btn btn-ghost" style="flex: 1; font-size: 12px; height: 38px; text-align: center; cursor: pointer; margin: 0; display: inline-flex; align-items: center; justify-content: center;">📤 Restore</label>
+                      <button type="button" id="btn-backup-data" class="btn btn-ghost" style="flex: 1; font-size: 12px; height: 38px;" data-i18n="prof.backup">📥 Backup</button>
+                      <label for="input-restore-data" class="btn btn-ghost" style="flex: 1; font-size: 12px; height: 38px; text-align: center; cursor: pointer; margin: 0; display: inline-flex; align-items: center; justify-content: center;" data-i18n="prof.restore">📤 Restore</label>
                       <input type="file" id="input-restore-data" accept=".json" style="display: none;">
                   </div>
-                  <input type="text" id="input-backup-nama" maxlength="60" placeholder="Nama file (opsional) — kosongkan = otomatis tanggal" style="width: 100%; margin-top: 10px;" />
-                  <p class="hint" style="margin-top: 8px;">Backup jadwal dan tugasmu dalam format .json</p>
+                  <input type="text" id="input-backup-nama" maxlength="60" placeholder="File name (optional) — leave blank for automatic date" style="width: 100%; margin-top: 10px;" data-i18n-placeholder="prof.backupNamePh" />
+                  <p class="hint" style="margin-top: 8px;" data-i18n="prof.backupHint">Export your schedule and tasks as a .json file</p>
               </div>
 
               <div class="field" style="margin-top: 14px;">
-                  <label>Zona Berbahaya</label>
-                  <button type="button" id="btn-hapus-jadwal" class="btn btn-ghost" style="width: 100%; height: 38px; font-size: 12px; color: #fda4a4; border-color: rgba(253, 164, 164, 0.4);">🗑️ Hapus Semua Data Jadwal</button>
-                  <p class="hint" style="margin-top: 8px;">Menghapus seluruh jadwal (semua hari). Tugas tidak ikut terhapus.</p>
+                  <label data-i18n="prof.danger">Danger Zone</label>
+                  <button type="button" id="btn-hapus-jadwal" class="btn btn-ghost" style="width: 100%; height: 38px; font-size: 12px; color: #fda4a4; border-color: rgba(253, 164, 164, 0.4);" data-i18n="sched.deleteAll">🗑️ Delete All Schedule Data</button>
+                  <p class="hint" style="margin-top: 8px;" data-i18n="prof.dangerHint">Deletes the entire schedule for all days. Tasks are kept.</p>
               </div>
 
               <div class="modal-actions" style="margin-top: 24px;">
-                  <button type="button" id="btn-batal-profil" class="btn btn-ghost">Batal</button>
-                  <button type="submit" class="btn btn-primary">Simpan Profil</button>
+                  <button type="button" id="btn-batal-profil" class="btn btn-ghost" data-i18n="form.cancel">Cancel</button>
+                  <button type="submit" class="btn btn-primary" data-i18n="prof.save">Save Profile</button>
               </div>
           </form>
       </div>
     </div>
 
-    <!-- ============ MODAL TAMBAH JADWAL ============ -->
+    <!-- ============ ADD SCHEDULE MODAL ============ -->
     <div class="modal-overlay" id="modal-jadwal-form" hidden>
       <div class="modal">
           <div class="modal-head">
-              <h2>Tambah Jadwal</h2>
+              <h2 data-i18n="jform.add">Add Schedule</h2>
               <button type="button" id="btn-tutup-jadwal" class="icon-btn">&times;</button>
           </div>
           <form id="form-tambah-jadwal">
               <div class="field">
-                  <label for="input-jadwal-hari">Hari</label>
+                  <label for="input-jadwal-hari" data-i18n="jform.day">Day</label>
                   <select id="input-jadwal-hari" required>
-                      <option value="0">Minggu</option>
-                      <option value="1">Senin</option>
-                      <option value="2">Selasa</option>
-                      <option value="3">Rabu</option>
-                      <option value="4">Kamis</option>
-                      <option value="5">Jumat</option>
-                      <option value="6">Sabtu</option>
+                      <option value="0" data-i18n-day="0">Sunday</option>
+                      <option value="1" data-i18n-day="1">Monday</option>
+                      <option value="2" data-i18n-day="2">Tuesday</option>
+                      <option value="3" data-i18n-day="3">Wednesday</option>
+                      <option value="4" data-i18n-day="4">Thursday</option>
+                      <option value="5" data-i18n-day="5">Friday</option>
+                      <option value="6" data-i18n-day="6">Saturday</option>
                   </select>
               </div>
               <div style="display: flex; gap: 10px; margin-bottom: 14px;">
                   <div class="field" style="flex: 1; margin-bottom: 0;">
-                      <label for="input-jadwal-mulai">Mulai (WIB)</label>
+                      <label for="input-jadwal-mulai" id="label-jadwal-mulai" data-i18n="jform.start">Start</label>
                       <input type="time" id="input-jadwal-mulai" required />
                   </div>
                   <div class="field" style="flex: 1; margin-bottom: 0;">
-                      <label for="input-jadwal-selesai">Selesai (WIB)</label>
+                      <label for="input-jadwal-selesai" id="label-jadwal-selesai" data-i18n="jform.end">End</label>
                       <input type="time" id="input-jadwal-selesai" required />
                   </div>
               </div>
               <div class="field">
-                  <label for="input-jadwal-mapel">Mata Pelajaran / Kegiatan</label>
-                  <input type="text" id="input-jadwal-mapel" placeholder="Contoh: Matematika" required />
+                  <label for="input-jadwal-mapel" data-i18n="jform.subject">Subject / Activity</label>
+                  <input type="text" id="input-jadwal-mapel" placeholder="e.g. Mathematics" required data-i18n-placeholder="jform.subjectPh" />
               </div>
               <div class="field">
-                  <label for="input-jadwal-tipe">Tipe</label>
+                  <label for="input-jadwal-tipe" data-i18n="jform.type">Type</label>
                   <select id="input-jadwal-tipe" required>
-                      <option value="pelajaran">Pelajaran</option>
-                      <option value="istirahat">Istirahat</option>
-                      <option value="upacara">Upacara</option>
-                      <option value="berseri">Lainnya</option>
+                      <option value="pelajaran" data-i18n="jform.lesson">Lesson</option>
+                      <option value="istirahat" data-i18n="jform.break">Break</option>
+                      <option value="upacara" data-i18n="jform.ceremony">Ceremony / Assembly</option>
+                      <option value="berseri" data-i18n="jform.other">Other</option>
                   </select>
               </div>
               <div class="field">
-                  <label for="input-jadwal-jamke">Urutan Jam Pelajaran (Jam Ke-)</label>
+                  <label for="input-jadwal-jamke" data-i18n="jform.period">Period Number</label>
                   <select id="input-jadwal-jamke" required>
-                      <option value="">— Pilih Jam Ke (1-25) —</option>
+                      <option value="" data-i18n="jform.pickPeriod">— Select a period —</option>
                   </select>
-                  <p class="hint">Range 1-25, wajib diisi, tidak boleh 0 atau duplikat di hari yang sama.</p>
+                  <p class="hint" data-i18n="jform.periodHint">Range 1–100, required; must not repeat within the same day.</p>
               </div>
               <div class="modal-actions">
-                  <button type="button" id="btn-batal-jadwal" class="btn btn-ghost">Batal</button>
-                  <button type="submit" class="btn btn-primary">Simpan Jadwal</button>
+                  <button type="button" id="btn-batal-jadwal" class="btn btn-ghost" data-i18n="form.cancel">Cancel</button>
+                  <button type="submit" class="btn btn-primary" data-i18n="jform.save">Save Schedule</button>
               </div>
           </form>
       </div>
     </div>
 
-    <!-- ============ MODAL AKSI JADWAL (EDIT / DELETE) ============ -->
+    <!-- ============ SCHEDULE ACTIONS MODAL (EDIT / DELETE) ============ -->
     <div class="modal-overlay" id="modal-jadwal-aksi" hidden>
       <div class="modal" style="max-width: 320px;">
         <div class="modal-head">
-          <h2>Pilih Aksi Jadwal</h2>
+          <h2 data-i18n="action.title">Schedule Options</h2>
           <button type="button" id="btn-tutup-aksi" class="icon-btn">&times;</button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 10px;">
-          <button type="button" id="btn-aksi-edit" class="btn btn-ghost" style="justify-content: flex-start; padding: 12px 16px;">✏️ Edit Jadwal</button>
-          <button type="button" id="btn-aksi-hapus" class="btn btn-ghost" style="justify-content: flex-start; padding: 12px 16px; color: #fda4a4; border-color: rgba(253, 164, 164, 0.4);">🗑️ Delete</button>
+          <button type="button" id="btn-aksi-edit" class="btn btn-ghost" style="justify-content: flex-start; padding: 12px 16px;" data-i18n="action.edit">✏️ Edit Schedule</button>
+          <button type="button" id="btn-aksi-hapus" class="btn btn-ghost" style="justify-content: flex-start; padding: 12px 16px; color: #fda4a4; border-color: rgba(253, 164, 164, 0.4);" data-i18n="action.delete">🗑️ Delete</button>
         </div>
       </div>
     </div>
 
-    <!-- ============ MODAL EDIT JADWAL ============ -->
+    <!-- ============ EDIT SCHEDULE MODAL ============ -->
     <div class="modal-overlay" id="modal-jadwal-edit" hidden>
       <div class="modal">
           <div class="modal-head">
-              <h2>Edit Jadwal</h2>
+              <h2 data-i18n="jform.edit">Edit Schedule</h2>
               <button type="button" id="btn-tutup-edit-jadwal" class="icon-btn">&times;</button>
           </div>
           <form id="form-edit-jadwal">
               <div style="display: flex; gap: 10px; margin-bottom: 14px;">
                   <div class="field" style="flex: 1; margin-bottom: 0;">
-                      <label for="input-edit-mulai">Mulai (WIB)</label>
+                      <label for="input-edit-mulai" id="label-edit-mulai" data-i18n="jform.start">Start</label>
                       <input type="time" id="input-edit-mulai" required />
                   </div>
                   <div class="field" style="flex: 1; margin-bottom: 0;">
-                      <label for="input-edit-selesai">Selesai (WIB)</label>
+                      <label for="input-edit-selesai" id="label-edit-selesai" data-i18n="jform.end">End</label>
                       <input type="time" id="input-edit-selesai" required />
                   </div>
               </div>
               <div class="field">
-                  <label for="input-edit-mapel">Mata Pelajaran / Kegiatan</label>
-                  <input type="text" id="input-edit-mapel" placeholder="Contoh: Matematika" required />
+                  <label for="input-edit-mapel" data-i18n="jform.subject">Subject / Activity</label>
+                  <input type="text" id="input-edit-mapel" placeholder="e.g. Mathematics" required data-i18n-placeholder="jform.subjectPh" />
               </div>
               <div class="field">
-                  <label for="input-edit-tipe">Tipe</label>
+                  <label for="input-edit-tipe" data-i18n="jform.type">Type</label>
                   <select id="input-edit-tipe" required>
-                      <option value="pelajaran">Pelajaran</option>
-                      <option value="istirahat">Istirahat</option>
-                      <option value="upacara">Upacara</option>
-                      <option value="berseri">Lainnya</option>
+                      <option value="pelajaran" data-i18n="jform.lesson">Lesson</option>
+                      <option value="istirahat" data-i18n="jform.break">Break</option>
+                      <option value="upacara" data-i18n="jform.ceremony">Ceremony / Assembly</option>
+                      <option value="berseri" data-i18n="jform.other">Other</option>
                   </select>
               </div>
               <div class="field">
-                  <label for="input-edit-jamke">Urutan Jam Pelajaran (Jam Ke-)</label>
+                  <label for="input-edit-jamke" data-i18n="jform.period">Period Number</label>
                   <select id="input-edit-jamke" required>
-                      <option value="">— Pilih Jam Ke (1-100) —</option>
+                      <option value="" data-i18n="jform.pickPeriod">— Select a period —</option>
                   </select>
-                  <p class="hint">Range 1-100, wajib diisi, tidak boleh 0 atau duplikat di hari yang sama.</p>
+                  <p class="hint" data-i18n="jform.periodHint">Range 1–100, required; must not repeat within the same day.</p>
               </div>
               <div class="modal-actions">
-                  <button type="button" id="btn-batal-edit-jadwal" class="btn btn-ghost">Batal</button>
-                  <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+                  <button type="button" id="btn-batal-edit-jadwal" class="btn btn-ghost" data-i18n="form.cancel">Cancel</button>
+                  <button type="submit" class="btn btn-primary" data-i18n="form.update">Save Changes</button>
               </div>
           </form>
       </div>
@@ -426,6 +432,7 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
+    <script src="i18n.js"></script>
     <script src="script.js"></script>
   </body>
 </html>

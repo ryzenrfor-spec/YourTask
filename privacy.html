@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#0f172a" />
-    <title>Kebijakan Privasi — YourTask</title>
+    <title>Privacy Policy — YourTask</title>
     <link rel="icon" type="image/png" href="icon.png" />
     <style>
       :root { color-scheme: light dark; }
@@ -38,87 +38,96 @@
         body { background: #0f172a; color: #e2e8f0; }
         .card { background: #1e293b; box-shadow: none; }
         h1, .back { color: #f1f5f9; }
-        p, li { color: #cbd5e1; }
-        .meta { color: #94a3b8; }
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <a class="back" href="index.html">← Kembali ke YourTask</a>
+      <a class="back" href="./">&larr; Back to YourTask</a>
       <div class="card">
-        <h1>Kebijakan Privasi YourTask</h1>
-        <p class="meta">Terakhir diperbarui: 15 September 2026</p>
+        <h1>Privacy Policy</h1>
+        <p class="meta">Effective date: September 18, 2026 · Developer: ErlanggaDev Studios</p>
 
-        <h2>1. Ringkasan</h2>
         <p>
-          YourTask adalah aplikasi <strong>local-first</strong>: seluruh data Anda (profil, jadwal
-          pelajaran, tugas, dan pengaturan) disimpan <strong>hanya di perangkat Anda</strong>, di dalam
-          browser, terenkripsi dengan <strong>AES-256-GCM</strong> pada IndexedDB. Kami tidak memiliki
-          server, tidak membuat akun, dan tidak mengumpulkan data pribadi apa pun.
+          YourTask ("the application") is developed and maintained by
+          <strong>ErlanggaDev Studios</strong> (contact:
+          erlanggadev.studios@gmail.com). This policy explains, in plain
+          language, what data the application handles and how it is protected.
         </p>
 
-        <h2>2. Data yang disimpan di perangkat Anda</h2>
+        <h2>1. Summary</h2>
         <ul>
-          <li>Nama dan asal sekolah (untuk tampilan sapaan)</li>
-          <li>Jadwal pelajaran dan daftar tugas</li>
-          <li>Pengaturan: zona waktu, hari aktif, offset sinkronisasi waktu</li>
-          <li>Kunci enkripsi AES-256 (non-extractable) — tidak dapat diekspor oleh JavaScript</li>
-        </ul>
-        <p>
-          Data ini tidak pernah dikirim ke kami karena kami tidak mengoperasikan server. Data hilang
-          hanya jika Anda menghapus data situs di browser.
-        </p>
-
-        <h2>3. Layanan pihak ketiga yang dihubungi</h2>
-        <ul>
-          <li>
-            <strong>Google Gemini API</strong> (<code>generativelanguage.googleapis.com</code>) — hanya
-            saat Anda sengaja menggunakan fitur <em>Pindai AI</em>. Gambar/PDF jadwal yang Anda pilih
-            dikirim langsung dari perangkat Anda ke Google untuk diproses menjadi teks jadwal. Google
-            memprosesnya sesuai
-            <a href="https://policies.google.com/privacy">Kebijakan Privasi Google</a>. App
-            <strong>tidak</strong> mengirim data ini secara otomatis. Jika Anda memakai kunci API
-            milik sendiri, kunci itu tersimpan terenkripsi di perangkat Anda dan tidak dikirim ke
-            mana pun selain Google.
-          </li>
-          <li>
-            <strong>WorldTimeAPI</strong> (<code>worldtimeapi.org</code>) — untuk sinkronisasi jam
-            (memastikan hitungan KBM dan alarm deadline akurat meski jam perangkat salah). Yang
-            dikirim hanyalah permintaan waktu standar; tidak ada data Anda.
-          </li>
-          <li>
-            <strong>Google Fonts</strong> — dimuat untuk tampilan aplikasi.
-          </li>
+          <li><strong>We do not collect your data.</strong> YourTask has no accounts, no analytics SDKs and no advertising.</li>
+          <li><strong>Your data stays on your device.</strong> Schedules, tasks and settings are stored only in your browser's local storage, encrypted with AES-256-GCM.</li>
+          <li><strong>No server receives your data.</strong> All core features work fully offline.</li>
         </ul>
 
-        <h2>4. Notifikasi</h2>
+        <h2>2. Data stored on your device</h2>
+        <p>The application stores the following data locally:</p>
+        <ul>
+          <li>Display name and school name (optional profile fields);</li>
+          <li>Class schedule and task list;</li>
+          <li>Interface preferences: language, time zone, theme, custom wallpaper and icon;</li>
+          <li>Backup file name preference.</li>
+        </ul>
+
+        <h2>3. Encryption</h2>
         <p>
-          Notifikasi deadline bersifat lokal: dibuat langsung di perangkat oleh service worker dan
-          hanya muncul setelah Anda memberi izin. Tidak ada push dari server eksternal.
+          All data above is encrypted with <strong>AES-256-GCM</strong>
+          (NIST SP 800-38D) using the Web Crypto API. The encryption key is
+          generated on your device and marked <em>non-extractable</em>: the
+          browser guarantees that no script — including ours — can read or
+          export the raw key material.
         </p>
 
-        <h2>5. Anak-anak</h2>
+        <h2>4. Network access</h2>
+        <p>The application makes exactly two optional network requests:</p>
+        <ul>
+          <li>
+            <strong>Time synchronization</strong> — a public time API
+            (worldtimeapi.org) is queried when your device clock appears to
+            drift. Only the current time is received; no personal data is sent.
+          </li>
+          <li>
+            <strong>AI document scan (opt-in)</strong> — if you provide your own
+            Google Gemini API key and explicitly use "AI Scan", the selected
+            schedule document is sent directly from your device to Google's
+            Generative Language API. The request is not routed through our
+            servers and we never see your key or your documents. Without a key,
+            this feature is inert.
+          </li>
+        </ul>
+
+        <h2>5. Notifications</h2>
         <p>
-          YourTask tidak sengaja ditujukan untuk anak di bawah 13 tahun dan tidak mengumpulkan data
-          apa pun dari siapa pun, termasuk anak-anak. Jika Anda orang tua/wali dan memiliki
-          pertanyaan, hubungi kontak di bawah.
+          Deadline reminders are generated on your device by the application's
+          service worker. Notification content never leaves your device.
         </p>
 
-        <h2>6. Perubahan kebijakan</h2>
+        <h2>6. Children's privacy</h2>
         <p>
-          Jika kebijakan ini berubah (misalnya saat fitur sinkronisasi cloud ditambahkan), tanggal
-          pembaruan di atas akan diubah dan perubahan akan diumumkan di dalam aplikasi.
+          YourTask is designed for students, including minors. Because no
+          personal data is collected, transmitted or shared, the application
+          does not knowingly process any personal information from children.
         </p>
 
-        <h2>7. Kontak</h2>
+        <h2>7. Your control</h2>
+        <ul>
+          <li><strong>Export:</strong> create a .json backup at any time (Profile &rarr; Backup).</li>
+          <li><strong>Delete:</strong> clearing the site's browser data removes everything permanently.</li>
+          <li><strong>Uninstall:</strong> removing the installed PWA deletes the app; stored data can be cleared separately as described above.</li>
+        </ul>
+
+        <h2>8. Changes to this policy</h2>
         <p>
-          Pertanyaan tentang kebijakan ini dapat dikirim ke:
-          <strong id="kontak-email">erlanggadev.studios@gmail.com</strong>
+          Material changes will be reflected on this page with an updated
+          effective date.
         </p>
-        <p class="meta" style="margin-top: 28px;">
-          Catatan developer: isi alamat email pada bagian 7 sebelum mengunggah ke Play Store, dan
-          gunakan URL halaman ini pada isian “Privacy Policy URL” di Play Console.
+
+        <h2>9. Contact</h2>
+        <p>
+          Questions or requests: <strong>erlanggadev.studios@gmail.com</strong>
+          <br />ErlanggaDev Studios
         </p>
       </div>
     </div>

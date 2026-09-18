@@ -1,5 +1,5 @@
-/* YourTask Service Worker (v25 - crop editor rasio layar) */
-const CACHE_NAME = 'yourtask-cache-v25';
+/* YourTask Service Worker (v26 - full i18n, formal English) */
+const CACHE_NAME = 'yourtask-cache-v26';
 const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
 const PRECACHE_URLS = [
@@ -7,6 +7,7 @@ const PRECACHE_URLS = [
   BASE + 'index.html',
   BASE + 'style.css',
   BASE + 'script.js',
+  BASE + 'i18n.js',
   BASE + 'manifest.json',
   BASE + 'privacy.html',
   BASE + 'icon.png',
@@ -83,7 +84,6 @@ const DB_STORE = 'enc';
 const DB_LEGACY_STORE = 'state';
 const KEY_DB_NAME = 'yourtask-keys-v1';
 const KEY_DB_STORE = 'keys';
-const DAY_NAMES = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
 let dbPromise = null;
 let keyPromise = null;
@@ -178,13 +178,15 @@ function idbPut(key, value) {
 }
 
 function getWibNow(tz) {
-  const parts = new Intl.DateTimeFormat('id-ID', {
-    timeZone: tz || 'Asia/Jakarta', weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false
+  /* en-US short weekday => locale-independent mapping (dayIndex 0 = Sunday) */
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz || 'Asia/Jakarta', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false
   }).formatToParts(new Date(Date.now() + waktuOffsetMs));
   const v = {};
   parts.forEach((p) => { v[p.type] = p.value; });
+  const WD = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   return {
-    dayIndex: DAY_NAMES.indexOf(v.weekday),
+    dayIndex: WD.hasOwnProperty(v.weekday) ? WD[v.weekday] : 0,
     minutes: Number(v.hour) * 60 + Number(v.minute)
   };
 }
@@ -232,8 +234,8 @@ async function checkBackgroundDeadlines() {
       const last = await idbGet(dedupKey);
       if (last) continue;
 
-      await self.registration.showNotification('⏰ Deadline tugas mendekat', {
-        body: task.mapel + ' (' + task.detail + ') — kelas mulai pukul ' + best.start + '.',
+      await self.registration.showNotification('⏰ Task deadline approaching', {
+        body: task.mapel + ' (' + task.detail + ') — the lesson starts at ' + best.start + '.',
         icon: new URL('icon.png', self.registration.scope).href,
         tag: 'yourtask-' + task.id
       });
