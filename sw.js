@@ -1,5 +1,5 @@
-/* YourTask Service Worker (v24 - fix tampilan wallpaper + crop editor) */
-const CACHE_NAME = 'yourtask-cache-v24';
+/* YourTask Service Worker (v25 - crop editor rasio layar) */
+const CACHE_NAME = 'yourtask-cache-v25';
 const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
 const PRECACHE_URLS = [
