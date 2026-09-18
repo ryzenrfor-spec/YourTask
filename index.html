@@ -34,11 +34,13 @@
     
   </head>
   <body>
+    <!-- Layer wallpaper kustom (tema) — paling belakang, di bawah seluruh UI -->
+    <div id="wallpaper-layer" aria-hidden="true"></div>
     <div class="app-shell">
       <!-- ============ HEADER ============ -->
       <header class="app-header">
         <div class="brand">
-          <img src="icon.png" alt="Logo" class="brand-mark" style="object-fit: cover; border-radius: 8px;" />
+          <img src="icon.png" alt="Logo" id="brand-icon" class="brand-mark" style="object-fit: cover; border-radius: 8px;" />
           <div class="brand-text">
             <div style="display: flex; align-items: center; gap: 6px;">
               <h1 id="display-username">Memuat...</h1>
@@ -133,7 +135,7 @@
 
       <footer class="app-footer">
         <p>LiliTask &middot; Custom Edition</p>
-        <p class="footer-sub">Data tersimpan terenkripsi (AES-256-GCM) di IndexedDB browser. · <a href="privacy.html" style="color:inherit;">Kebijakan Privasi</a></p>
+        <p class="footer-sub">Data tersimpan terenkripsi (AES-256-GCM) di IndexedDB browser. · <a href="privacy.html" style="color:inherit;">Kebijakan Privasi</a> · erlanggadev.studios@gmail.com</p>
       </footer>
     </div>
 
@@ -221,10 +223,64 @@
                   <p class="hint">Menentukan jam masuk, status KBM &amp; deadline. "Otomatis" memakai zona perangkatmu.</p>
               </div>
             
-              <hr style="border: 0; border-top: 1px dashed var(--line); margin: 20px 0 10px;">
-              
-              <div class="field" style="margin-bottom: 0;">
-                  <label>Data Aplikasi (Backup/Restore)</label>
+            <hr style="border: 0; border-top: 1px dashed var(--line); margin: 20px 0 10px;">
+            
+            <div class="field">
+              <label>Tema — Wallpaper</label>
+              <div id="tema-preset-grid" class="preset-grid" style="margin-bottom: 8px;"></div>
+              <button type="button" id="btn-tema-galeri" class="btn btn-ghost" style="width: 100%; height: 38px; font-size: 12px; margin-top: 4px;">🖼️ Dari Galeri…</button>
+              <input type="file" id="input-tema-galeri" accept="image/*" style="display: none;">
+              <div id="tema-editor-wrap" hidden style="margin-top: 10px;">
+                <div id="tema-crop-stage" class="crop-stage"><img class="crop-img" alt=""></div>
+                <div class="crop-actions">
+                  <input type="range" id="tema-zoom-range" min="100" max="400" value="100" aria-label="Zoom wallpaper">
+                  <button type="button" id="tema-dim-turun" class="theme-mini-btn">Gelap −</button>
+                  <button type="button" id="tema-dim-naik" class="theme-mini-btn">Gelap +</button>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                  <button type="button" id="tema-terapkan" class="btn btn-primary" style="flex: 1; height: 38px; font-size: 13px;">Terapkan Wallpaper</button>
+                  <button type="button" id="tema-batal" class="btn btn-ghost" style="height: 38px; font-size: 13px;">Batal</button>
+                </div>
+              </div>
+            </div>
+            
+            <div class="field">
+              <label>Tema — Warna Aksen</label>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <div id="tema-warna-grid" class="preset-grid" style="flex: 1; grid-template-columns: repeat(5, 1fr);"></div>
+              </div>
+              <label for="tema-warna-input" class="hint" style="display: flex; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer;">
+                <input type="color" id="tema-warna-input" value="#14b8a6" style="width: 34px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--navy-700); cursor: pointer;"> Warna kustom…
+              </label>
+            </div>
+
+            <div class="field">
+              <label>Ikon Aplikasi (dalam app)</label>
+              <div class="icon-picker-row">
+                <div id="ikon-preview" class="icon-preview">Y</div>
+                <div style="flex: 1; min-width: 0;">
+                  <label for="input-ikon-galeri" class="theme-mini-btn" style="display: inline-flex; align-items: center; cursor: pointer;">🎨 Pilih Gambar…</label>
+                  <input type="file" id="input-ikon-galeri" accept="image/*" style="display: none;">
+                  <button type="button" id="btn-ikon-reset" class="theme-mini-btn danger" style="margin-left: 6px;">Reset</button>
+                </div>
+              </div>
+              <div id="ikon-editor-wrap" hidden style="margin-top: 10px;">
+                <div id="ikon-crop-stage" class="crop-stage crop-square"><img class="crop-img" alt=""></div>
+                <div class="crop-actions">
+                  <input type="range" id="ikon-zoom-range" min="100" max="400" value="100" aria-label="Zoom ikon">
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                  <button type="button" id="ikon-terapkan" class="btn btn-primary" style="flex: 1; height: 38px; font-size: 13px;">Terapkan Ikon</button>
+                  <button type="button" id="ikon-batal" class="btn btn-ghost" style="height: 38px; font-size: 13px;">Batal</button>
+                </div>
+              </div>
+              <p class="hint" style="margin-top: 8px;">Ikon ini tampil di header dalam app (ikon launcher HP mengikuti instalasi).</p>
+            </div>
+
+            <hr style="border: 0; border-top: 1px dashed var(--line); margin: 20px 0 10px;">
+            
+            <div class="field" style="margin-bottom: 0;">
+                <label>Data Aplikasi (Backup/Restore)</label>
                   <div style="display: flex; gap: 10px; margin-top: 6px;">
                       <button type="button" id="btn-backup-data" class="btn btn-ghost" style="flex: 1; font-size: 12px; height: 38px;">📥 Backup</button>
                       <label for="input-restore-data" class="btn btn-ghost" style="flex: 1; font-size: 12px; height: 38px; text-align: center; cursor: pointer; margin: 0; display: inline-flex; align-items: center; justify-content: center;">📤 Restore</label>

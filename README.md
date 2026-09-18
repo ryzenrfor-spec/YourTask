@@ -53,4 +53,5 @@ Tanpa framework, tanpa build step, tanpa dependency runtime — ~100KB statis.
 
 ## 📄 Lisensi
 
-Hak cipta © 2026. Dibuat dengan ❤️ oleh seorang siswa, untuk siswa.
+Hak cipta © 2026 Erlangga Dev Studios · Dibuat dengan ❤️ oleh seorang siswa, untuk siswa.
+Kontak: erlanggadev.studios@gmail.com

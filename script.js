@@ -99,6 +99,27 @@
     el.previewDeadline = document.getElementById("preview-deadline");
     el.formError = document.getElementById("form-error");
     el.toast = document.getElementById("toast");
+    el.wallpaperLayer = document.getElementById("wallpaper-layer");
+    el.brandIcon = document.getElementById("brand-icon");
+    el.temaPresetGrid = document.getElementById("tema-preset-grid");
+    el.temaWarnaGrid = document.getElementById("tema-warna-grid");
+    el.temaWarnaInput = document.getElementById("tema-warna-input");
+    el.btnTemaGaleri = document.getElementById("btn-tema-galeri");
+    el.inputTemaGaleri = document.getElementById("input-tema-galeri");
+    el.temaEditorWrap = document.getElementById("tema-editor-wrap");
+    el.temaCropStage = document.getElementById("tema-crop-stage");
+    el.temaZoomRange = document.getElementById("tema-zoom-range");
+    el.temaDimNaik = document.getElementById("tema-dim-naik");
+    el.temaDimTurun = document.getElementById("tema-dim-turun");
+    el.temaTerapkan = document.getElementById("tema-terapkan");
+    el.temaBatal = document.getElementById("tema-batal");
+    el.inputIkonGaleri = document.getElementById("input-ikon-galeri");
+    el.ikonEditorWrap = document.getElementById("ikon-editor-wrap");
+    el.ikonCropStage = document.getElementById("ikon-crop-stage");
+    el.ikonZoomRange = document.getElementById("ikon-zoom-range");
+    el.ikonTerapkan = document.getElementById("ikon-terapkan");
+    el.ikonBatal = document.getElementById("ikon-batal");
+    el.btnIkonReset = document.getElementById("btn-ikon-reset");
     el.cariTugas = document.getElementById("cari-tugas");
     el.filterMapel = document.getElementById("filter-mapel");
     el.modalTitle = document.getElementById("modal-title");
@@ -233,6 +254,478 @@
     encPut("tasks", tugasList);
     encPut("schedule", JADWAL);
     encPut("timezone", currentTZ);
+  }
+
+  /* ==================== TEMA: WALLPAPER, AKSEN & IKON ====================
+     Semua tersimpan terenkripsi di IndexedDB (kunci "theme" & "iconCustom").
+     Wallpaper dipangkas via crop editor (pan/pinch/zoom) menjadi JPEG dataURL
+     terkompresi (maks 1600px sisi terpanjang, q0.72) supaya IDB tetap ramping.
+     Ikon dipangkas persegi (maks 256px, PNG). */
+  var TEMA_PRESETS = [
+    { id: "default", nama: "Default", css: null },
+    { id: "senja", nama: "Senja", css: "linear-gradient(160deg, #2b1055 0%, #7597de 55%, #f7b3a1 100%)" },
+    { id: "hutan", nama: "Hutan", css: "linear-gradient(165deg, #0b2b26 0%, #14532d 55%, #365314 100%)" },
+    { id: "laut", nama: "Laut", css: "linear-gradient(170deg, #082f49 0%, #0c4a6e 55%, #164e63 100%)" },
+    { id: "galaksi", nama: "Galaksi", css: "radial-gradient(120% 90% at 20% 0%, #4c1d95 0%, #1e1b4b 45%, #020617 100%)" },
+    { id: "sakura", nama: "Sakura", css: "linear-gradient(160deg, #831843 0%, #9d174d 50%, #be185d 100%)" }
+  ];
+  var WARNA_PRESETS = [
+    { id: "teal", rgb: "20, 184, 166" },
+    { id: "biru", rgb: "59, 130, 246" },
+    { id: "ungu", rgb: "139, 92, 246" },
+    { id: "rose", rgb: "244, 63, 94" },
+    { id: "oranye", rgb: "249, 115, 22" }
+  ];
+  var temaState = { wallpaper: null, accent: null, dim: 12, zoom: 100, x: 0, y: 0 };
+  var ikonState = null; /* { dataUrl, zoom, x, y } atau null = default */
+  var cropCtx = null; /* konteks editor yang sedang aktif */
+
+  function hexToRgbTriplet(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(hex || "").trim());
+    if (!m) return null;
+    var n = parseInt(m[1], 16);
+    return ((n >> 16) & 255) + ", " + ((n >> 8) & 255) + ", " + (n & 255);
+  }
+
+  function applyTemaVisual() {
+    var s = temaState;
+    var layer = el.wallpaperLayer;
+    if (!layer) return;
+    /* Layer dipasang di <html> (bukan body) supaya tidak tertutup background body */
+    if (layer.parentElement !== document.documentElement) {
+      document.documentElement.appendChild(layer);
+    }
+    var adaWallpaper = false;
+    if (s.wallpaper && s.wallpaper.dataUrl) {
+      adaWallpaper = true;
+      layer.className = "";
+      layer.style.backgroundImage = "url(" + s.wallpaper.dataUrl + ")";
+      layer.style.setProperty("--wp-zoom", (s.wallpaper.zoom || 100) / 100);
+      layer.style.setProperty("--wp-x", (s.wallpaper.x || 0) + "%");
+      layer.style.setProperty("--wp-y", (s.wallpaper.y || 0) + "%");
+      layer.style.setProperty("--wp-dim", s.dim || 0);
+    } else {
+      layer.style.backgroundImage = "";
+      layer.style.removeProperty("--wp-zoom");
+      layer.style.removeProperty("--wp-x");
+      layer.style.removeProperty("--wp-y");
+      layer.style.removeProperty("--wp-dim");
+      layer.className = "";
+    }
+    var preset = TEMA_PRESETS.find(function (p) { return p.id === s.wallpaper && p.css; });
+    if (preset) {
+      adaWallpaper = true;
+      layer.className = "tema-gradient";
+      layer.style.backgroundImage = preset.css;
+      layer.style.setProperty("--wp-dim", Math.round((s.dim || 0) / 2)); /* gradient sudah terdesain, dim separuh */
+    }
+    document.documentElement.classList.toggle("has-wallpaper", adaWallpaper);
+    document.body.classList.toggle("has-wallpaper", adaWallpaper);
+    if (!adaWallpaper) {
+      layer.style.display = "none";
+    } else {
+      layer.style.display = "";
+    }
+    if (s.accent) {
+      document.documentElement.style.setProperty("--accent-rgb", s.accent);
+    } else {
+      document.documentElement.style.removeProperty("--accent-rgb");
+    }
+  }
+
+  function applyIkonVisual() {
+    if (el.brandIcon) {
+      el.brandIcon.src = (ikonState && ikonState.dataUrl) ? ikonState.dataUrl : "icon.png";
+    }
+    var prev = document.getElementById("ikon-preview");
+    if (prev) {
+      if (ikonState && ikonState.dataUrl) {
+        prev.innerHTML = "";
+        var img = document.createElement("img");
+        img.src = ikonState.dataUrl;
+        img.alt = "Ikon kustom";
+        prev.appendChild(img);
+      } else {
+        prev.textContent = "Y";
+      }
+    }
+  }
+
+  async function muatTema() {
+    try {
+      var t = await encGet("theme");
+      if (t && typeof t === "object") {
+        temaState.wallpaper = t.wallpaper || null;
+        temaState.accent = (t.accent && /^\d{1,3}, \d{1,3}, \d{1,3}$/.test(t.accent)) ? t.accent : null;
+        temaState.dim = typeof t.dim === "number" ? t.dim : 12;
+      }
+      var i = await encGet("iconCustom");
+      if (i && i.dataUrl && typeof i.dataUrl === "string" && i.dataUrl.indexOf("data:image/") === 0) {
+        ikonState = { dataUrl: i.dataUrl, zoom: i.zoom || 100, x: i.x || 0, y: i.y || 0 };
+      }
+    } catch (e) { /* tema korup / lama: pakai default */ }
+    applyTemaVisual();
+    applyIkonVisual();
+    renderTemaPresets();
+    renderWarnaPresets();
+  }
+
+  function simpanTema() {
+    return encPut("theme", {
+      wallpaper: temaState.wallpaper,
+      accent: temaState.accent,
+      dim: temaState.dim
+    });
+  }
+
+  function renderTemaPresets() {
+    var grid = el.temaPresetGrid;
+    if (!grid) return;
+    grid.innerHTML = "";
+    TEMA_PRESETS.forEach(function (p) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "preset-swatch";
+      btn.style.background = p.css || "var(--navy-900)";
+      btn.setAttribute("aria-label", "Tema " + p.nama);
+      var nm = document.createElement("span");
+      nm.className = "preset-name";
+      nm.textContent = p.nama;
+      btn.appendChild(nm);
+      if (temaState.wallpaper === p.id) btn.classList.add("active");
+      btn.addEventListener("click", function () {
+        temaState.wallpaper = p.id;
+        simpanTema();
+        applyTemaVisual();
+        renderTemaPresets();
+        showToast("Tema \"" + p.nama + "\" diterapkan.");
+      });
+      grid.appendChild(btn);
+    });
+  }
+
+  function renderWarnaPresets() {
+    var grid = el.temaWarnaGrid;
+    if (!grid) return;
+    grid.innerHTML = "";
+    WARNA_PRESETS.forEach(function (w) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "preset-swatch";
+      btn.style.background = "rgb(" + w.rgb + ")";
+      btn.style.height = "34px";
+      btn.setAttribute("aria-label", "Aksen " + w.id);
+      if (temaState.accent === w.rgb) btn.classList.add("active");
+      btn.addEventListener("click", function () {
+        temaState.accent = (w.id === "teal") ? null : w.rgb; /* teal = default */
+        simpanTema();
+        applyTemaVisual();
+        renderWarnaPresets();
+      });
+      grid.appendChild(btn);
+    });
+    if (el.temaWarnaInput) {
+      var trip = temaState.accent || "20, 184, 166";
+      var parts = trip.split(",");
+      var hex = "#" + parts.map(function (p) {
+        var v = parseInt(p.trim(), 10).toString(16);
+        return v.length < 2 ? "0" + v : v;
+      }).join("");
+      el.temaWarnaInput.value = hex;
+    }
+  }
+
+  /* --- Crop editor generik (dipakai wallpaper & ikon) ---
+     Interaksi: drag = geser, pinch (2 jari) / roda / slider = zoom. */
+  function bukaCropEditor(opts) {
+    var stage = opts.stage;
+    var img = stage.querySelector(".crop-img");
+    var range = opts.range;
+    cropCtx = {
+      stage: stage, img: img, range: range,
+      dataUrl: opts.dataUrl,
+      scale: 1, x: 0, y: 0,
+      onChange: opts.onChange || function () {},
+      onApply: opts.onApply || function () {}
+    };
+    /* Sumber kebenaran per-editor: ctx milik stage ini (bukan global),
+       agar dua editor terbuka bersamaan tidak saling menimpa. */
+    stage._cropCtx = cropCtx;
+    var mulai = function () {
+      /* Tampilkan wrap DULU, baru ukur: stage hidden punya clientWidth = 0 */
+      opts.wrap.hidden = false;
+      fitCrop(cropCtx);
+    };
+    img.onload = mulai;
+    img.src = opts.dataUrl;
+    if (img.complete && img.naturalWidth > 0) {
+      /* data URI yang sudah ter-decode: onload mungkin tidak terpanggil lagi */
+      img.onload = null;
+      mulai();
+    }
+  }
+
+  function fitCrop(ctx) {
+    if (!ctx) return;
+    var stage = ctx.stage, img = ctx.img;
+    /* Stage bisa masih hidden saat editor dibuka -> clientWidth/Height = 0.
+       Ukur setelah wrap ditampilkan, atau pakai ukuran preset fallback. */
+    var sw = stage.clientWidth || 320;
+    var sh = stage.clientHeight || 180;
+    var iw = img.naturalWidth || 1, ih = img.naturalHeight || 1;
+    var cover = Math.max(sw / iw, sh / ih);
+    ctx.baseScale = cover;
+    ctx.minScale = cover;
+    ctx.maxScale = cover * 4;
+    ctx.scale = ctx.minScale;
+    ctx.x = 0; ctx.y = 0;
+    if (ctx.range) ctx.range.value = "100";
+    terapkanCrop(ctx);
+  }
+
+  function terapkanCrop(ctx) {
+    if (!ctx) return;
+    var img = ctx.img;
+    var t = "translate(-50%, -50%) translate(" + ctx.x + "px, " + ctx.y + "px) scale(" + ctx.scale + ")";
+    img.style.transform = t;
+  }
+
+  var cropInteraksiTerpasang = { tema: null, ikon: null };
+  function pasangCropInteraksi(stageKey, stage, ctxGetter) {
+    /* Pasang listener HANYA SEKALI per stage; ctx diambil dinamis lewat ctxGetter.
+       (Dulu ctx lama ter-capture saat pemasangan -> editor rusak di pemakaian kedua) */
+    if (cropInteraksiTerpasang[stageKey]) return;
+    cropInteraksiTerpasang[stageKey] = true;
+    var ctx = null;
+    var stage2 = stage;
+    var pointerId = null, lastX = 0, lastY = 0;
+    var pinchDist = 0, pinchScale = 0;
+    var pointers = {};
+    stage2.addEventListener("pointerdown", function (e) {
+      ctx = ctxGetter();
+      if (!ctx) return;
+      pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+      if (Object.keys(pointers).length === 1) {
+        pointerId = e.pointerId; lastX = e.clientX; lastY = e.clientY;
+        stage2.setPointerCapture(e.pointerId);
+      } else if (Object.keys(pointers).length === 2) {
+        var ks = Object.keys(pointers);
+        var a = pointers[ks[0]], b = pointers[ks[1]];
+        pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+        pinchScale = ctx.scale;
+      }
+    });
+    stage2.addEventListener("pointermove", function (e) {
+      if (!pointers[e.pointerId] || !ctx) return;
+      pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var n = Object.keys(pointers).length;
+      if (n === 2) {
+        var ks2 = Object.keys(pointers);
+        var a2 = pointers[ks2[0]], b2 = pointers[ks2[1]];
+        var d = Math.hypot(a2.x - b2.x, a2.y - b2.y);
+        if (pinchDist > 0) {
+          ctx.scale = Math.min(ctx.maxScale, Math.max(ctx.minScale, pinchScale * (d / pinchDist)));
+          if (ctx.range) ctx.range.value = String(Math.round(100 + (ctx.scale - ctx.minScale) / (ctx.maxScale - ctx.minScale) * 300));
+          terapkanCrop(ctx);
+        }
+      } else if (n === 1 && e.pointerId === pointerId) {
+        ctx.x += e.clientX - lastX;
+        ctx.y += e.clientY - lastY;
+        lastX = e.clientX; lastY = e.clientY;
+        clampPan(ctx);
+        terapkanCrop(ctx);
+      }
+    });
+    var lepas = function (e) {
+      delete pointers[e.pointerId];
+      if (Object.keys(pointers).length < 2) pinchDist = 0;
+      if (e.pointerId === pointerId) pointerId = null;
+    };
+    stage2.addEventListener("pointerup", lepas);
+    stage2.addEventListener("pointercancel", lepas);
+    stage2.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      ctx = ctxGetter();
+      if (!ctx) return;
+      var faktor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+      ctx.scale = Math.min(ctx.maxScale, Math.max(ctx.minScale, ctx.scale * faktor));
+      if (ctx.range) ctx.range.value = String(Math.round(100 + (ctx.scale - ctx.minScale) / (ctx.maxScale - ctx.minScale) * 300));
+      clampPan(ctx);
+      terapkanCrop(ctx);
+    }, { passive: false });
+  }
+
+  /* Slider zoom: dipasang sekali per range; ctx diambil dinamis lewat getCtx */
+  function pasangZoomRange(range, getCtx) {
+    if (!range || range.dataset.zoomBound) return;
+    range.dataset.zoomBound = "1";
+    range.addEventListener("input", function () {
+      var ctx = getCtx();
+      if (!ctx) return;
+      var v = parseInt(range.value, 10) / 100; /* 1.0 – 4.0 */
+      ctx.scale = ctx.minScale + (ctx.maxScale - ctx.minScale) * (v - 1) / 3;
+      clampPan(ctx);
+      terapkanCrop(ctx);
+    });
+  }
+
+  function clampPan(ctx) {
+    if (!ctx) return;
+    var stage = ctx.stage, img = ctx.img;
+    var sw = stage.clientWidth || 320, sh = stage.clientHeight || 180;
+    var iw = img.naturalWidth || 1, ih = img.naturalHeight || 1;
+    var w = iw * ctx.scale, h = ih * ctx.scale;
+    var maxX = Math.max(0, (w - sw) / 2), maxY = Math.max(0, (h - sh) / 2);
+    ctx.x = Math.min(maxX, Math.max(-maxX, ctx.x));
+    ctx.y = Math.min(maxY, Math.max(-maxY, ctx.y));
+  }
+
+  function renderHasilCrop(ctx, ukuranMaks, tipeMime, kualitas) {
+    var stage = ctx.stage, img = ctx.img;
+    var sw = stage.clientWidth, sh = stage.clientHeight;
+    var scale = ukuranMaks / Math.max(sw, sh);
+    var cv = document.createElement("canvas");
+    cv.width = Math.round(sw * scale);
+    cv.height = Math.round(sh * scale);
+    var cx2 = cv.getContext("2d");
+    /* Transformasi stage → canvas: (px + ctx.x) * scale; posisi img dasar: center */
+    var iw = img.naturalWidth, ih = img.naturalHeight;
+    var drawW = iw * ctx.scale, drawH = ih * ctx.scale;
+    var dx = (sw - drawW) / 2 + ctx.x;
+    var dy = (sh - drawH) / 2 + ctx.y;
+    cx2.imageSmoothingQuality = "high";
+    cx2.drawImage(img, dx * scale, dy * scale, drawW * scale, drawH * scale);
+    return cv.toDataURL(tipeMime, kualitas);
+  }
+
+  function bacaFileGambar(file, ukuranMaks, cb) {
+    if (!file || !/^image\//.test(file.type)) { showToast("File harus berupa gambar."); return; }
+    var reader = new FileReader();
+    reader.onload = function (ev) {
+      var img = new Image();
+      img.onload = function () {
+        var skala = Math.min(1, ukuranMaks / Math.max(img.naturalWidth, img.naturalHeight));
+        if (skala >= 1) { cb(ev.target.result); return; }
+        var cv = document.createElement("canvas");
+        cv.width = Math.round(img.naturalWidth * skala);
+        cv.height = Math.round(img.naturalHeight * skala);
+        cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+        cb(cv.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = function () { showToast("Gambar tidak bisa dibaca."); };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function mulaiTemaUI() {
+    if (el.btnTemaGaleri && el.inputTemaGaleri) {
+      el.btnTemaGaleri.addEventListener("click", function () { el.inputTemaGaleri.click(); });
+      el.inputTemaGaleri.addEventListener("change", function (e) {
+        var file = e.target.files && e.target.files[0];
+        e.target.value = "";
+        if (!file) return;
+        bacaFileGambar(file, 2000, function (dataUrl) {
+          bukaCropEditor({
+            stage: el.temaCropStage, range: el.temaZoomRange, /* cropInteraksiTema */
+            wrap: el.temaEditorWrap, dataUrl: dataUrl,
+            onApply: function (hasil) {
+              temaState.wallpaper = { dataUrl: hasil, zoom: 100, x: 0, y: 0 };
+              temaState.dim = Math.max(0, Math.min(60, temaState.dim));
+              simpanTema();
+              applyTemaVisual();
+              renderTemaPresets();
+              el.temaEditorWrap.hidden = true;
+              cropCtx = null;
+              showToast("Wallpaper diterapkan.");
+              if (el.temaCropStage) el.temaCropStage._cropCtx = null;
+              cropCtx = null;
+            }
+          });
+          pasangCropInteraksi("tema", el.temaCropStage, function () { return cropCtx; });
+        });
+      });
+    }
+    if (el.temaZoomRange) {
+      pasangZoomRange(el.temaZoomRange, function () { return el.temaCropStage && el.temaCropStage._cropCtx; });
+    }
+    if (el.temaDimNaik) el.temaDimNaik.addEventListener("click", function () {
+      temaState.dim = Math.min(60, temaState.dim + 8);
+      applyTemaVisual();
+      simpanTema();
+    });
+    if (el.temaDimTurun) el.temaDimTurun.addEventListener("click", function () {
+      temaState.dim = Math.max(0, temaState.dim - 8);
+      applyTemaVisual();
+      simpanTema();
+    });
+    if (el.temaTerapkan) el.temaTerapkan.addEventListener("click", function () {
+      var ctx = el.temaCropStage && el.temaCropStage._cropCtx;
+      if (!ctx) return;
+      var hasil = renderHasilCrop(ctx, 1600, "image/jpeg", 0.72);
+      if (ctx.onApply) ctx.onApply(hasil);
+    });
+    if (el.temaBatal) el.temaBatal.addEventListener("click", function () {
+      el.temaEditorWrap.hidden = true;
+      if (el.temaCropStage) el.temaCropStage._cropCtx = null;
+      cropCtx = null;
+    });
+    if (el.temaWarnaInput) el.temaWarnaInput.addEventListener("input", function () {
+      var trip = hexToRgbTriplet(el.temaWarnaInput.value);
+      if (!trip) return;
+      temaState.accent = trip;
+      document.documentElement.style.setProperty("--accent-rgb", trip);
+    });
+    if (el.temaWarnaInput) el.temaWarnaInput.addEventListener("change", function () {
+      simpanTema();
+      renderWarnaPresets();
+      showToast("Warna aksen diperbarui.");
+    });
+    /* --- Ikon --- */
+    if (el.inputIkonGaleri) {
+      el.inputIkonGaleri.addEventListener("change", function (e) {
+        var file = e.target.files && e.target.files[0];
+        e.target.value = "";
+        if (!file) return;
+        bacaFileGambar(file, 1024, function (dataUrl) {
+          bukaCropEditor({
+            stage: el.ikonCropStage, range: el.ikonZoomRange, /* cropInteraksiIkon */
+            wrap: el.ikonEditorWrap, dataUrl: dataUrl,
+            onApply: function (hasil) {
+              ikonState = { dataUrl: hasil, zoom: 100, x: 0, y: 0 };
+              encPut("iconCustom", ikonState);
+              applyIkonVisual();
+              el.ikonEditorWrap.hidden = true;
+              cropCtx = null;
+              showToast("Ikon kustom diterapkan.");
+              if (el.ikonCropStage) el.ikonCropStage._cropCtx = null;
+              cropCtx = null;
+            }
+          });
+          pasangCropInteraksi("ikon", el.ikonCropStage, function () { return cropCtx; });
+        });
+      });
+    }
+    if (el.ikonZoomRange) {
+      pasangZoomRange(el.ikonZoomRange, function () { return el.ikonCropStage && el.ikonCropStage._cropCtx; });
+    }
+    if (el.ikonTerapkan) el.ikonTerapkan.addEventListener("click", function () {
+      var ctx = el.ikonCropStage && el.ikonCropStage._cropCtx;
+      if (!ctx) return;
+      var hasil = renderHasilCrop(ctx, 256, "image/png", 1);
+      if (ctx.onApply) ctx.onApply(hasil);
+    });
+    if (el.ikonBatal) el.ikonBatal.addEventListener("click", function () {
+      el.ikonEditorWrap.hidden = true;
+      if (el.ikonCropStage) el.ikonCropStage._cropCtx = null;
+      cropCtx = null;
+    });
+    if (el.btnIkonReset) el.btnIkonReset.addEventListener("click", function () {
+      ikonState = null;
+      encPut("iconCustom", null);
+      applyIkonVisual();
+      showToast("Ikon kembali ke bawaan.");
+    });
   }
 
   /* --- MIGRASI: pindahkan data lama dari localStorage ke IndexedDB terenkripsi --- */
@@ -426,7 +919,9 @@
       username: currentUsername,
       sekolah: currentSchool,
       hariAktif: hariAktif,
-            timezone: currentTZ
+            timezone: currentTZ,
+      tema: { wallpaper: temaState.wallpaper, accent: temaState.accent, dim: temaState.dim },
+      ikon: ikonState
     
     };
      var namaCustom = el.inputBackupNama ? el.inputBackupNama.value.trim() : "";
@@ -463,6 +958,20 @@
           currentTZ = parsed.timezone;
           pekerjaan.push(encPut("timezone", currentTZ));
                 }
+        if (parsed.tema && typeof parsed.tema === "object") {
+          var t = parsed.tema;
+          var temaBersih = {
+            wallpaper: (t.wallpaper && typeof t.wallpaper === "object" && typeof t.wallpaper.dataUrl === "string" && t.wallpaper.dataUrl.indexOf("data:image/") === 0)
+              ? { dataUrl: t.wallpaper.dataUrl, zoom: t.wallpaper.zoom || 100, x: t.wallpaper.x || 0, y: t.wallpaper.y || 0 }
+              : (typeof t.wallpaper === "string" ? t.wallpaper : null),
+            accent: (typeof t.accent === "string" && /^\d{1,3}, \d{1,3}, \d{1,3}$/.test(t.accent)) ? t.accent : null,
+            dim: typeof t.dim === "number" ? Math.max(0, Math.min(60, t.dim)) : 12
+          };
+          pekerjaan.push(encPut("theme", temaBersih));
+        }
+        if (parsed.ikon && parsed.ikon.dataUrl && typeof parsed.ikon.dataUrl === "string" && parsed.ikon.dataUrl.indexOf("data:image/") === 0) {
+          pekerjaan.push(encPut("iconCustom", { dataUrl: parsed.ikon.dataUrl, zoom: parsed.ikon.zoom || 100, x: parsed.ikon.x || 0, y: parsed.ikon.y || 0 }));
+        }
         
 
         showToast("Data berhasil di-restore! Memuat ulang...");
@@ -1107,6 +1616,8 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
     await muatProfil();
     await muatJadwal();
     await muatTugas();
+    await muatTema();
+    mulaiTemaUI();
     muatOffsetWaktu().then(ambilWaktuServer); /* kompensasi jam perangkat */
     mirrorStateToIDB();
     terapkanLabelZona();
@@ -1905,7 +2416,7 @@ if (s.tipe === "pelajaran" && s.mapel && s.mapel.trim() !== "" && !/berseri/i.te
       var cb = document.createElement("input");
       cb.type = "checkbox"; cb.value = d;
       cb.checked = hariAktif.indexOf(d) !== -1;
-      cb.style.accentColor = "#14b8a6";
+      cb.style.accentColor = "rgb(var(--accent-rgb))";
       lab.appendChild(cb);
       lab.appendChild(document.createTextNode(NAMA_HARI[d]));
       boxHari.appendChild(lab);

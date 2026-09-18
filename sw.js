@@ -1,4 +1,4 @@
-/* YourTask Service Worker (v23 - PWA update toast support) */
+/* YourTask Service Worker (v24 - fix tampilan wallpaper + crop editor) */
 const CACHE_NAME = 'yourtask-cache-v24';
 const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
