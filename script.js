@@ -452,8 +452,9 @@
        agar dua editor terbuka bersamaan tidak saling menimpa. */
     stage._cropCtx = cropCtx;
     var mulai = function () {
-      /* Tampilkan wrap DULU, baru ukur: stage hidden punya clientWidth = 0 */
+      /* Tampilkan wrap DULU, sesuaikan ukuran stage, baru ukur: hidden = 0 */
       opts.wrap.hidden = false;
+      if (opts.seuaiLayar) sesuaikanStageLayar(stage);
       fitCrop(cropCtx);
     };
     img.onload = mulai;
@@ -488,6 +489,24 @@
     var img = ctx.img;
     var t = "translate(-50%, -50%) translate(" + ctx.x + "px, " + ctx.y + "px) scale(" + ctx.scale + ")";
     img.style.transform = t;
+  }
+
+  /* Stage wallpaper PERSIS rasio viewport: dengan rasio yang sama, background
+     cover memetakan hasil crop 1:1 ke layar — framing = hasil akhir, tanpa
+     re-zoom. Saat layar potret, lebar stage menyempit agar tingginya muat. */
+  function sesuaikanStageLayar(stage) {
+    if (!stage) return;
+    var vw = window.innerWidth || 390;
+    var vh = window.innerHeight || 844;
+    var rasio = vw / vh; /* <1 di potret, >1 di lanskap */
+    var lebarMaks = (stage.parentElement && stage.parentElement.clientWidth) || Math.min(400, vw - 72);
+    var tinggiMaks = Math.max(220, Math.round(vh * 0.5));
+    var lebar = Math.min(lebarMaks, Math.round(tinggiMaks * rasio));
+    stage.style.width = lebar + "px";
+    stage.style.height = Math.round(lebar / rasio) + "px";
+    stage.style.aspectRatio = "auto";
+    stage.style.marginLeft = "auto";
+    stage.style.marginRight = "auto";
   }
 
   var cropInteraksiTerpasang = { tema: null, ikon: null };
@@ -628,6 +647,7 @@
         bacaFileGambar(file, 2000, function (dataUrl) {
           bukaCropEditor({
             stage: el.temaCropStage, range: el.temaZoomRange, /* cropInteraksiTema */
+            seuaiLayar: true,
             wrap: el.temaEditorWrap, dataUrl: dataUrl,
             onApply: function (hasil) {
               temaState.wallpaper = { dataUrl: hasil, zoom: 100, x: 0, y: 0 };

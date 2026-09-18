@@ -232,6 +232,10 @@ html > #wallpaper-layer {
 }
 .crop-stage:active { cursor: grabbing; }
 .crop-stage.crop-square { aspect-ratio: 1 / 1; }
+/* Stage wallpaper mengikuti rasio layar perangkat (width/height di-set JS
+   saat editor dibuka) agar hasil crop tampil persis seperti yang dibingkai
+   — bukan ter-zoom ulang oleh background cover di layar potret. */
+#tema-crop-stage { aspect-ratio: auto; }
 .crop-stage .crop-img {
   position: absolute; left: 50%; top: 50%; transform-origin: center;
   max-width: none; max-height: none; pointer-events: none;
