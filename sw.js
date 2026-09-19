@@ -1,5 +1,5 @@
-/* YourTask Service Worker (v31 - inner inputs: no double frost) */
-const CACHE_NAME = 'yourtask-cache-v31';
+/* YourTask Service Worker (v32 - home-screen icon follows custom icon) */
+const CACHE_NAME = 'yourtask-cache-v32';
 const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
 const PRECACHE_URLS = [
