@@ -344,63 +344,10 @@
     }
   }
 
-  /* Ikon home-screen (manifest + favicon) mengikuti ikon kustom.
-     Manifest statis tidak bisa diubah, jadi saat ikon kustom aktif kita
-     menimpa manifest dengan versi runtime (blob URL) berisi foto itu.
-     Catatan: ikon home screen yang sudah terpasang tidak berubah otomatis
-     di semua launcher — user perlu "Add to home screen" ulang. */
-  var manifestRuntimeUrl = null;
-  function perbaruiIkonLuar() {
-    var ikonDefault = ["icon.png", "icon-512.png"];
-    try {
-      var favicon = document.querySelector('link[rel="icon"]');
-      var touch = document.querySelector('link[rel="apple-touch-icon"]');
-      var manifestLink = document.querySelector('link[rel="manifest"]');
-      if (!favicon || !touch || !manifestLink) return;
-
-      if (!ikonState || !ikonState.dataUrl) {
-        /* kembali ke default */
-        favicon.href = "icon.png";
-        touch.href = "icon.png";
-        if (manifestRuntimeUrl) { URL.revokeObjectURL(manifestRuntimeUrl); manifestRuntimeUrl = null; }
-        manifestLink.href = "manifest.json";
-        return;
-      }
-
-      var img = new Image();
-      img.onload = function () {
-        var c = document.createElement("canvas");
-        c.width = 512; c.height = 512;
-        c.getContext("2d").drawImage(img, 0, 0, 512, 512);
-        var url = c.toDataURL("image/png");
-        favicon.href = url;
-        touch.href = url;
-        var manifest = {
-          name: "YourTask — Class Schedule & Tasks",
-          short_name: "YourTask",
-          start_url: ".",
-          display: "standalone",
-          background_color: "#0b1220",
-          theme_color: "#0f172a",
-          icons: [
-            { src: url, sizes: "192x192", type: "image/png", purpose: "any" },
-            { src: url, sizes: "512x512", type: "image/png", purpose: "any" },
-            { src: url, sizes: "512x512", type: "image/png", purpose: "maskable" }
-          ]
-        };
-        if (manifestRuntimeUrl) URL.revokeObjectURL(manifestRuntimeUrl);
-        manifestRuntimeUrl = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" }));
-        manifestLink.href = manifestRuntimeUrl;
-      };
-      img.src = ikonState.dataUrl;
-    } catch (e) {}
-  }
-
   function applyIkonVisual() {
     if (el.brandIcon) {
       el.brandIcon.src = (ikonState && ikonState.dataUrl) ? ikonState.dataUrl : "icon.png";
     }
-    perbaruiIkonLuar();
     var prev = document.getElementById("ikon-preview");
     if (prev) {
       if (ikonState && ikonState.dataUrl) {

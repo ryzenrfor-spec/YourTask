@@ -1,5 +1,5 @@
-/* YourTask Service Worker (v32 - home-screen icon follows custom icon) */
-const CACHE_NAME = 'yourtask-cache-v32';
+/* YourTask Service Worker (v33 - static manifest restored for proper WebAPK install) */
+const CACHE_NAME = 'yourtask-cache-v33';
 const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
 const PRECACHE_URLS = [
