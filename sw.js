@@ -1,5 +1,5 @@
-/* YourTask Service Worker (v26 - full i18n, formal English) */
-const CACHE_NAME = 'yourtask-cache-v26';
+/* YourTask Service Worker (v27 - frosted glass cards over custom wallpaper) */
+const CACHE_NAME = 'yourtask-cache-v27';
 const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
 const PRECACHE_URLS = [
