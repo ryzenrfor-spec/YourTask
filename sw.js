@@ -1,5 +1,5 @@
-/* YourTask Service Worker (v29 - frosted glass: modal form fields + toast) */
-const CACHE_NAME = 'yourtask-cache-v29';
+/* YourTask Service Worker (v30 - cache-busting precache: fixes stale asset updates) */
+const CACHE_NAME = 'yourtask-cache-v30';
 const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
 const PRECACHE_URLS = [
@@ -17,11 +17,16 @@ const PRECACHE_URLS = [
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
+  /* cache:'no-store' = precache WAJIB bypass HTTP cache browser. Tanpa ini,
+     cache.add() bisa menyimpan aset LAMA dari HTTP cache ke cache baru,
+     sehingga bump CACHE_NAME tidak pernah benar-benar mengirim file baru. */
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
       Promise.all(
         PRECACHE_URLS.map((url) =>
-          cache.add(url).catch((err) => console.warn('[SW] skip cache:', url, err))
+          fetch(url, { cache: 'no-store' })
+            .then((res) => (res && res.ok) ? cache.put(url, res) : undefined)
+            .catch((err) => console.warn('[SW] skip cache:', url, err))
         )
       )
     )
@@ -49,7 +54,7 @@ self.addEventListener('fetch', (event) => {
 
   /* Update senyap di belakang (tidak memperlambat respon) */
   event.waitUntil(
-    fetch(req).then((res) => {
+    fetch(req, { cache: 'no-store' }).then((res) => {
       if (res && res.status === 200) {
         const copy = res.clone();
         return caches.open(CACHE_NAME).then((c) => c.put(req, copy));
