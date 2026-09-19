@@ -1,5 +1,5 @@
-/* YourTask Service Worker (v27 - frosted glass cards over custom wallpaper) */
-const CACHE_NAME = 'yourtask-cache-v27';
+/* YourTask Service Worker (v28 - frosted glass: header card + search inputs) */
+const CACHE_NAME = 'yourtask-cache-v28';
 const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
 const PRECACHE_URLS = [
