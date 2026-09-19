@@ -1,5 +1,5 @@
-/* YourTask Service Worker (v33 - static manifest restored for proper WebAPK install) */
-const CACHE_NAME = 'yourtask-cache-v33';
+/* YourTask Service Worker (v34 - monochrome icon for Android themed icons) */
+const CACHE_NAME = 'yourtask-cache-v34';
 const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
 const PRECACHE_URLS = [
@@ -12,6 +12,7 @@ const PRECACHE_URLS = [
   BASE + 'privacy.html',
   BASE + 'icon.png',
   BASE + 'icon-512.png',
+  BASE + 'icon-monochrome.png',
   BASE + 'icon-maskable-512.png'
 ];
 
