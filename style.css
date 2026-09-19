@@ -292,7 +292,11 @@ body.has-wallpaper .modal,
 body.has-wallpaper .task-item,
 body.has-wallpaper .app-header,
 body.has-wallpaper #cari-tugas,
-body.has-wallpaper #filter-mapel {
+body.has-wallpaper #filter-mapel,
+body.has-wallpaper .field select,
+body.has-wallpaper .field input[type="text"],
+body.has-wallpaper .field input[type="time"],
+body.has-wallpaper .toast {
   background-color: rgba(15, 23, 42, 0.62);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
   backdrop-filter: blur(14px) saturate(1.15);
