@@ -1,5 +1,5 @@
-/* YourTask Service Worker (v30 - cache-busting precache: fixes stale asset updates) */
-const CACHE_NAME = 'yourtask-cache-v30';
+/* YourTask Service Worker (v31 - inner inputs: no double frost) */
+const CACHE_NAME = 'yourtask-cache-v31';
 const BASE = new URL('./', self.registration.scope).href; /* scope-relative: aman di host/domain mana pun */
 
 const PRECACHE_URLS = [

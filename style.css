@@ -305,6 +305,19 @@ body.has-wallpaper .status-card.is-active { background-color: rgba(22, 32, 58, 0
 body.has-wallpaper .task-item.is-urgent { background-color: rgba(245, 158, 11, 0.1); }
 body.has-wallpaper .task-item.is-done { background-color: rgba(232, 237, 247, 0.04); }
 
+/* Input di dalam kartu frosted: JANGAN menumpuk tint+blur kedua di atas tint
+   panel (hasilnya nyaris solid). Cukup overlay putih tipis ala .schedule-row —
+   blur dari panel induk sudah menutupi mereka. */
+body.has-wallpaper #cari-tugas,
+body.has-wallpaper #filter-mapel,
+body.has-wallpaper .field select,
+body.has-wallpaper .field input[type="text"],
+body.has-wallpaper .field input[type="time"] {
+  background-color: rgba(232, 237, 247, 0.06);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 body.has-wallpaper .panel,
 body.has-wallpaper .modal,
 body.has-wallpaper .btn-primary,
